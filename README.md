@@ -4,33 +4,61 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
 
-Regression testing and configuration sweeps for RAG pipelines.
+**Stop shipping RAG regressions.**
 
-> **Status: usable.** Build a golden set, measure against it, gate pull requests on the
-> result, sweep configurations to find what actually wins, and score answer grounding —
-> including as a GitHub Action. See [the design document](docs/design.md).
+rag-ci measures every change to your RAG pipeline against a baseline and fails the pull
+request when retrieval actually got worse — not when it merely looks worse.
 
-## The problem
+```console
+$ uvx rag-ci run
+     rag-ci run  (6 scored cases)
+┏━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ metric     ┃  mean ┃         95% CI ┃
+┡━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ recall@3 * │ 0.833 │ [0.500, 1.000] │
+└────────────┴───────┴────────────────┘
+latency p50 1 ms  p95 1 ms
 
-You changed the chunk size. Did retrieval get better?
+$ uvx rag-ci gate --baseline baseline.json
+Gate: Pass — recall@3 moved by +0.000 (95% CI [0.000, 0.000]) over 6 paired cases.
+```
 
-Most teams cannot answer that. They ship a change, eyeball a few queries, and move on. The
-2026 literature suggests this is expensive: *[Beyond the
+That is unedited output from [`examples/reference/`](examples/reference), which you can run
+yourself in two commands. Read the interval, not the mean: six questions pin recall@3 no
+tighter than somewhere between 0.500 and 1.000. Every other evaluation tool would have
+handed you `0.833` and let you believe it.
+
+## Why the interval is the point
+
+Cut `top_k` to 1 in that same example and recall@3 falls from 0.833 to 0.667. rag-ci does
+not block:
+
+```console
+Gate: Pass — recall@3 moved by -0.167 (95% CI [-0.500, 0.000]) over 6 paired cases.
+```
+
+A drop that large is probably real, and rag-ci still refuses to call it — because across
+six paired cases the paired bootstrap cannot separate it from noise. The interval, spanning
+`-0.500` to `0.000`, is the tool telling you how little evidence six questions buy. Widen
+the golden set and that interval tightens until the same change trips the gate. **A tool
+that fails builds on noise gets switched off within a week**, so this one errs toward
+silence and shows its evidence either way.
+
+The same logic runs in reverse, which is where the money is: *[Beyond the
 Reranker](https://arxiv.org/html/2606.28367v1)* finds that many retrieval enhancements stop
-contributing anything once a strong reranker is present. People are stacking techniques that
-do nothing and paying for them in latency and tokens.
+contributing anything once a strong reranker is present. Teams are stacking techniques that
+do nothing and paying for them in latency and tokens, because a bare score moving from 0.71
+to 0.74 reads like progress.
 
-Existing evaluation tools do not close the gap. They report a bare score with no confidence
-interval — so a recall@10 moving from 0.71 to 0.74 on 200 questions looks like progress when
-it is indistinguishable from noise. None of them run as a gate on a pull request, and none
-of them sweep configurations.
-
-Meanwhile the academic side settled this years ago: paired bootstrap tests with 10,000
-resamples and 95% confidence intervals are standard in
-[T2-RAGBench](https://arxiv.org/html/2604.01733v1) and HetDocQA. That rigor has not reached
-the tools practitioners actually run.
+The academic side settled this years ago — paired bootstrap tests with 10,000 resamples and
+95% confidence intervals are standard in
+[T2-RAGBench](https://arxiv.org/html/2604.01733v1) and HetDocQA. That rigor had not reached
+the tools practitioners actually run. rag-ci is that rigor behind a CLI and a GitHub Action.
 
 ## Commands
+
+Every command below works today; see [the design document](docs/design.md) for how they fit
+together.
 
 ```bash
 uvx rag-ci init            # scaffold an adapter for your pipeline   ✅
@@ -82,9 +110,9 @@ repository.
 
 - **Ground truth anchored to document passages, never to chunks.** Change the chunk size and
   your golden set still works. This is what makes sweeping possible at all.
-- **Statistics as the core mechanism.** Every metric carries a confidence interval. The gate
-  uses a paired bootstrap test and blocks only when a regression is both statistically
-  significant and large enough to matter.
+- **A two-condition gate.** A regression blocks the build only when it is both statistically
+  significant and larger than `min-effect`. Significance alone would block on trivia;
+  effect size alone would block on noise.
 - **Built for real corpora.** Stratified sampling for question generation, successive halving
   instead of grid search, index-time and query-time parameters separated so sweeps rebuild
   indexes as rarely as possible, and a recall-vs-pool-size curve so results measured on a
