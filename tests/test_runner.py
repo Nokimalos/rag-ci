@@ -177,3 +177,89 @@ async def test_cost_and_tokens_are_none_when_the_adapter_reports_nothing():
 async def test_an_empty_golden_set_is_rejected():
     with pytest.raises(ValueError, match="no cases"):
         await run_cases(ReferenceRag(), [], config={}, metric_names=["recall@5"], golden_hash="h")
+
+
+async def test_a_judge_adds_tier_two_metrics():
+    from tests.fakes import AnsweringRag, FakeJudge
+
+    record = await run_cases(
+        AnsweringRag(),
+        CASES,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(),
+    )
+    assert "faithfulness" in record.metrics
+    assert record.judged is True
+
+
+async def test_no_judge_means_no_tier_two_metrics():
+    from tests.fakes import AnsweringRag
+
+    record = await run_cases(
+        AnsweringRag(), CASES, config={"top_k": 5}, metric_names=["recall@5"], golden_hash="h"
+    )
+    assert "faithfulness" not in record.metrics
+    assert record.judged is False
+
+
+async def test_an_adapter_without_answer_is_not_judged():
+    from tests.fakes import FakeJudge
+
+    # ReferenceRag retrieves but does not generate; asking for tier 2 must not crash.
+    record = await run_cases(
+        ReferenceRag(),
+        CASES,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(),
+    )
+    assert record.judged is False
+
+
+async def test_a_judge_failure_does_not_invalidate_the_run():
+    from tests.fakes import AnsweringRag, FakeJudge
+
+    # Tier 1 measured fine; a judge outage must not turn that into an invalid run.
+    record = await run_cases(
+        AnsweringRag(),
+        CASES,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(fail=True),
+    )
+    assert record.valid is True
+    assert record.metrics["recall@5"].n == len(CASES)
+    assert "faithfulness" not in record.metrics
+
+
+async def test_citation_accuracy_is_absent_when_nothing_is_cited():
+    from tests.fakes import AnsweringRag, FakeJudge
+
+    record = await run_cases(
+        AnsweringRag(cite=False),
+        CASES,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(),
+    )
+    assert "faithfulness" in record.metrics
+    assert "citation_accuracy" not in record.metrics
+
+
+async def test_the_verdict_is_kept_on_the_case_result():
+    from tests.fakes import AnsweringRag, FakeJudge
+
+    record = await run_cases(
+        AnsweringRag(),
+        CASES[:1],
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(),
+    )
+    assert record.case_results[0].verdict is not None
