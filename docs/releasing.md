@@ -29,10 +29,19 @@ already released and skip it.
 
 ## Idempotence
 
-The workflow asks *"does this version already have a tag?"*, not *"did the version
-change?"*. Re-running it on an already-released version does nothing. That also means an
-unrelated edit to `pyproject.toml` — a new dependency, a lint rule — triggers the workflow,
-finds the current version already tagged, and stops.
+The workflow asks PyPI *"is this version already published?"* — not git, and not "did the
+version change?". Re-running it on an already-released version does nothing, and an
+unrelated edit to `pyproject.toml` triggers the workflow, finds the version published, and
+stops.
+
+**Why the index and not the tag.** A tag proves someone tagged; only the index proves the
+package shipped, and publication is the step that must never happen twice. Version 0.3.0
+was tagged by hand during a workflow migration and published nowhere — a tag-based check
+would have reported it as released forever. The simple index is queried rather than the
+JSON API, which is CDN-cached and lagged by several minutes during the 0.2.0 release.
+
+A hand-pushed tag still triggers the workflow too. A release process must not depend on
+the order two pull requests happen to be merged in.
 
 ## Trying it without publishing
 
