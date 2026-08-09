@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ragci.stats import bootstrap_ci
+from ragci.stats import bootstrap_ci, paired_bootstrap_test
 
 
 def test_mean_is_the_sample_mean():
@@ -58,3 +58,84 @@ def test_different_seeds_give_close_but_distinct_intervals():
 def test_empty_input_is_rejected():
     with pytest.raises(ValueError, match="at least one value"):
         bootstrap_ci([])
+
+
+def test_identical_samples_have_zero_delta_and_no_significance():
+    values = [0.0, 1.0, 1.0, 0.0, 1.0] * 20
+    result = paired_bootstrap_test(values, values)
+    assert result.delta == pytest.approx(0.0)
+    assert result.p_value > 0.05
+    assert result.n_pairs == 100
+
+
+def test_a_clear_regression_is_significant():
+    rng = np.random.default_rng(11)
+    baseline = rng.uniform(0.6, 1.0, 200).tolist()
+    candidate = [value - 0.25 for value in baseline]
+    result = paired_bootstrap_test(baseline, candidate)
+    assert result.delta == pytest.approx(-0.25, abs=0.01)
+    assert result.p_value < 0.01
+    assert result.ci_high < 0
+
+
+def test_a_clear_improvement_is_not_flagged_as_regression():
+    rng = np.random.default_rng(12)
+    baseline = rng.uniform(0.2, 0.6, 200).tolist()
+    candidate = [value + 0.25 for value in baseline]
+    result = paired_bootstrap_test(baseline, candidate)
+    assert result.delta > 0
+    # p_value answers "is this NOT a regression", so an improvement scores high.
+    assert result.p_value > 0.95
+
+
+def test_noise_that_flips_sign_case_to_case_is_not_significant():
+    rng = np.random.default_rng(13)
+    baseline = rng.uniform(0.0, 1.0, 25).tolist()
+    candidate = [value + rng.normal(0.0, 0.05) for value in baseline]
+    result = paired_bootstrap_test(baseline, candidate)
+    assert result.p_value > 0.05
+
+
+def test_a_uniform_tiny_drop_is_significant_which_is_why_min_effect_exists():
+    # Every case drops by exactly 0.01, so the differences have zero variance and the
+    # test is certain. Significance alone would block a pull request over this, which is
+    # precisely why the gate also demands the effect be material.
+    rng = np.random.default_rng(13)
+    baseline = rng.uniform(0.0, 1.0, 25).tolist()
+    candidate = [value - 0.01 for value in baseline]
+    result = paired_bootstrap_test(baseline, candidate)
+    assert result.p_value < 0.05
+    assert result.delta == pytest.approx(-0.01)
+
+
+def test_pairing_detects_a_shift_that_unpaired_comparison_would_miss():
+    # Per-case scores vary wildly, but every case drops by the same small amount.
+    # Comparing two independent means drowns that shift in between-case variance;
+    # pairing removes it entirely. This is why the gate must be paired.
+    rng = np.random.default_rng(14)
+    baseline = rng.uniform(0.0, 1.0, 150).tolist()
+    candidate = [value - 0.05 for value in baseline]
+
+    paired = paired_bootstrap_test(baseline, candidate)
+    unpaired_baseline = bootstrap_ci(baseline)
+    unpaired_candidate = bootstrap_ci(candidate)
+
+    assert paired.p_value < 0.01
+    # The unpaired intervals overlap heavily: the same shift looks like nothing.
+    assert unpaired_candidate.ci_high > unpaired_baseline.ci_low
+
+
+def test_mismatched_lengths_are_rejected():
+    with pytest.raises(ValueError, match="same number of cases"):
+        paired_bootstrap_test([0.1, 0.2], [0.1])
+
+
+def test_paired_empty_input_is_rejected():
+    with pytest.raises(ValueError, match="at least one pair"):
+        paired_bootstrap_test([], [])
+
+
+def test_paired_test_is_reproducible():
+    a = [0.1, 0.5, 0.9, 0.3, 0.7]
+    b = [0.2, 0.4, 0.8, 0.4, 0.6]
+    assert paired_bootstrap_test(a, b, seed=5) == paired_bootstrap_test(a, b, seed=5)
