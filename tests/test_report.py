@@ -2,7 +2,8 @@ import json
 
 from rich.console import Console
 
-from ragci.report import load_json, render_console, save_json
+from ragci.baseline import GateDecision
+from ragci.report import load_json, render_console, render_markdown, save_json
 from ragci.runner import CaseResult, RunRecord, Timings
 from ragci.stats import MetricSummary
 
@@ -73,3 +74,70 @@ def test_saved_json_is_indented_for_reviewable_diffs(tmp_path):
     save_json(_record(), path)
     assert "\n  " in path.read_text()
     json.loads(path.read_text())
+
+
+def _decision(**overrides) -> GateDecision:
+    defaults = dict(
+        passed=True,
+        reason="ok",
+        metric="recall@5",
+        delta=0.004,
+        p_value=0.42,
+        ci_low=-0.01,
+        ci_high=0.02,
+        n_pairs=40,
+        message="recall@5 moved by +0.004",
+    )
+    return GateDecision(**{**defaults, **overrides})
+
+
+def test_markdown_contains_the_metric_table():
+    output = render_markdown(_record())
+    assert "| recall@5" in output
+    assert "0.750" in output
+    assert "[0.600, 0.900]" in output
+
+
+def test_markdown_marks_a_pass():
+    output = render_markdown(_record(), _decision())
+    assert "✅" in output
+    assert "40 paired cases" in output
+
+
+def test_markdown_marks_a_regression():
+    output = render_markdown(
+        _record(),
+        _decision(passed=False, reason="regression", delta=-0.08, p_value=0.001),
+    )
+    assert "❌" in output
+    assert "-0.080" in output
+    assert "0.0010" in output
+
+
+def test_markdown_explains_a_stale_baseline_instead_of_showing_numbers():
+    output = render_markdown(
+        _record(),
+        _decision(
+            passed=False,
+            reason="stale_baseline",
+            delta=None,
+            p_value=None,
+            ci_low=None,
+            ci_high=None,
+            n_pairs=0,
+            message="The golden set changed since the baseline was recorded.",
+        ),
+    )
+    assert "golden set changed" in output
+    assert "p=" not in output
+
+
+def test_markdown_without_a_decision_omits_the_verdict_section():
+    output = render_markdown(_record())
+    assert "Gate" not in output
+
+
+def test_markdown_flags_an_invalid_run():
+    output = render_markdown(_record(valid=False, error_rate=0.5))
+    assert "50%" in output
+    assert "invalid" in output.lower()

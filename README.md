@@ -6,9 +6,8 @@
 
 Regression testing and configuration sweeps for RAG pipelines.
 
-> **Status: early.** `rag-ci init` and `rag-ci run` work today — write an adapter, bring a
-> golden set, get tier-1 metrics with confidence intervals. `gate`, `sweep`, and golden-set
-> generation are next; see [the design document](docs/design.md).
+> **Status: usable.** `run` and `gate` work end to end, including as a GitHub Action.
+> `sweep` and golden-set generation are next; see [the design document](docs/design.md).
 
 ## The problem
 
@@ -30,16 +29,46 @@ resamples and 95% confidence intervals are standard in
 [T2-RAGBench](https://arxiv.org/html/2604.01733v1) and HetDocQA. That rigor has not reached
 the tools practitioners actually run.
 
-## What rag-ci will do
+## Commands
 
 ```bash
-uvx rag-ci init            # scaffold an adapter for your pipeline
-uvx rag-ci golden gen      # generate candidate questions from your corpus
-uvx rag-ci golden review   # accept / edit / reject them, then commit the result
-uvx rag-ci run             # measure
-uvx rag-ci gate            # fail the PR only on a statistically real regression
-uvx rag-ci sweep           # find the configuration that actually wins
+uvx rag-ci init            # scaffold an adapter for your pipeline   ✅
+uvx rag-ci run             # measure, with confidence intervals      ✅
+uvx rag-ci gate            # fail the PR only on a real regression   ✅
+uvx rag-ci golden gen      # generate candidate questions            planned
+uvx rag-ci golden review   # accept / edit / reject, then commit     planned
+uvx rag-ci sweep           # find the configuration that wins        planned
 ```
+
+## Use it in CI
+
+```yaml
+name: rag-ci
+on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  retrieval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Nokimalos/rag-ci@v1
+        with:
+          adapter: ragci_adapter.py
+          golden: tests/golden.jsonl
+```
+
+The gate exits `1` on a regression and `2` when it cannot make a trustworthy comparison —
+an invalid run, or a baseline recorded against a different golden set. See
+[docs/github-action.md](docs/github-action.md) for recording your first baseline and tuning
+`min-effect`.
+
+A worked example lives in [`examples/reference/`](examples/reference): an adapter, its
+golden set, and a committed baseline. rag-ci gates it on every pull request to this
+repository.
 
 ## What makes it different
 

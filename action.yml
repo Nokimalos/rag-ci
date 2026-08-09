@@ -1,0 +1,57 @@
+name: rag-ci
+description: Measure retrieval quality and fail the pull request on a real regression.
+
+inputs:
+  adapter:
+    description: Path to your rag-ci adapter
+    default: ragci_adapter.py
+  golden:
+    description: Path to the golden set
+    default: golden.jsonl
+  baseline:
+    description: Path to the committed baseline
+    default: .ragci/baseline.json
+  metric:
+    description: Metric to gate on; defaults to the adapter's declared primary
+    default: ""
+  min-effect:
+    description: Smallest drop worth failing over
+    default: "0.02"
+  comment:
+    description: Post the report as a pull request comment
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    # No floating major tag is published for setup-uv, so the exact version is required.
+    - uses: astral-sh/setup-uv@v9.0.0
+      with:
+        enable-cache: true
+
+    - name: Measure
+      shell: bash
+      run: |
+        uvx rag-ci run \
+          --adapter "${{ inputs.adapter }}" \
+          --golden "${{ inputs.golden }}" \
+          ${{ inputs.metric && format('--metric {0}', inputs.metric) || '' }} \
+          --out .ragci/run.json
+
+    - name: Gate
+      id: gate
+      shell: bash
+      run: |
+        uvx rag-ci gate \
+          --run .ragci/run.json \
+          --baseline "${{ inputs.baseline }}" \
+          --min-effect "${{ inputs.min-effect }}" \
+          --markdown .ragci/report.md
+
+    # always(): the report matters most when the gate just failed.
+    - name: Comment
+      if: ${{ always() && inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh pr comment "${{ github.event.number }}" --body-file .ragci/report.md
