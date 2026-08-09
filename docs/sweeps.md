@@ -69,8 +69,21 @@ The table ranks configurations by the deepest rung they reached, then by score. 
 configuration eliminated in rung 0 shows the score it earned on the small sample — enough to
 see why it was dropped, not enough to conclude it is bad.
 
-**A winner is not automatically a significant winner.** When scores cluster, the ranking is
-a tie-break, not a finding. Confirm a candidate against your baseline with `rag-ci gate`
+**A winner is not automatically a significant winner.** When every configuration scores the
+same on the first rung, the cut is settled by tie-break rather than by evidence, and the
+sweep says so:
+
+```
+Warning: configurations were eliminated while tied with the survivors, so the cut was
+decided by tie-break rather than by evidence. This winner is a draw, not a result.
+```
+
+That warning is common on small golden sets, where a handful of easy questions leave every
+configuration on 1.000. The fix is more cases, not a different sweep.
+
+Scores from configurations eliminated early are marked `*`: they were measured on fewer
+cases and **are not comparable** with the winner's. A configuration showing 1.000 on two
+cases has not beaten one showing 0.833 on six. Confirm a candidate against your baseline with `rag-ci gate`
 before adopting it: that path runs the paired bootstrap and will tell you whether the
 difference survives scrutiny.
 

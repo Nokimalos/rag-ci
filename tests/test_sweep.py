@@ -257,3 +257,29 @@ def test_the_outcome_records_the_grid_size_directly():
     # different case count than the divisor assumes.
     outcome = successive_halving([{"k": i} for i in range(9)], lambda config, n: 0.5, n_cases=90)
     assert outcome.n_configs == 9
+
+
+def test_a_tied_first_rung_is_reported_as_arbitrary():
+    # Every configuration scoring the same means the cut was settled by the tie-break,
+    # not by evidence. Presenting a "winner" from that is presenting a coin toss.
+    outcome = successive_halving([{"k": i} for i in range(9)], lambda config, n: 1.0, n_cases=90)
+    assert outcome.arbitrary_elimination is True
+    assert outcome.decisive is False
+
+
+def test_a_clear_ranking_is_not_arbitrary():
+    outcome = successive_halving(
+        [{"k": i} for i in range(9)], lambda config, n: config["k"] / 10, n_cases=90
+    )
+    assert outcome.arbitrary_elimination is False
+    assert outcome.decisive is True
+
+
+def test_a_tie_away_from_the_cut_is_not_arbitrary():
+    # Ties among configurations that all lose do not affect the cut. The survivors must
+    # be distinct, though — three tied finalists means the *final* pick is a coin toss.
+    scores = {0: 0.9, 1: 0.8, 2: 0.7, 3: 0.1, 4: 0.1, 5: 0.1, 6: 0.1, 7: 0.1, 8: 0.1}
+    outcome = successive_halving(
+        [{"k": i} for i in range(9)], lambda config, n: scores[config["k"]], n_cases=90
+    )
+    assert outcome.arbitrary_elimination is False

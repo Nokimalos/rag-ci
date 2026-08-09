@@ -122,11 +122,28 @@ def render_sweep(outcome: "SweepOutcome", console: Console | None = None) -> Non
     table.add_column("cases", justify="right")
 
     ranked = sorted(best.values(), key=lambda e: (-e.rung, -e.score))
+    deepest = max(e.rung for e in outcome.evaluations)
     for evaluation in ranked:
         marker = " ← winner" if evaluation.config == outcome.winner else ""
         params = ", ".join(f"{k}={v}" for k, v in sorted(evaluation.config.items())) or "default"
-        table.add_row(f"{params}{marker}", f"{evaluation.score:.3f}", str(evaluation.n_cases))
+        # Scores from different rungs come from different case counts. Saying so beats
+        # letting a reader conclude the sweep picked the lowest number in the column.
+        cases = str(evaluation.n_cases) + ("" if evaluation.rung == deepest else " *")
+        table.add_row(f"{params}{marker}", f"{evaluation.score:.3f}", cases)
     console.print(table)
+
+    if any(e.rung != deepest for e in ranked):
+        console.print(
+            "[dim]* eliminated earlier, on fewer cases — these scores are not "
+            "comparable with the winner's.[/]"
+        )
+
+    if outcome.arbitrary_elimination:
+        console.print(
+            "[yellow]Warning:[/] configurations were eliminated while tied with the "
+            "survivors, so the cut was decided by tie-break rather than by evidence. "
+            "This winner is a draw, not a result — add cases and sweep again."
+        )
 
     spent = sum(e.n_cases for e in outcome.evaluations)
     saved = 100 * (1 - spent / outcome.full_grid_cost) if outcome.full_grid_cost else 0
