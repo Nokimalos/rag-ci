@@ -1,5 +1,6 @@
 """Tier 2: is the generated answer actually grounded in what was retrieved?"""
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from pydantic import BaseModel, model_validator
@@ -129,3 +130,48 @@ class AnthropicJudge:
             output_format=Verdict,
         )
         return response.parsed_output
+
+
+MAX_FLIP_RATE = 0.1
+
+
+class CalibrationResult(BaseModel):
+    cases: int
+    flips: int
+    flip_rate: float
+    trustworthy: bool
+
+
+def calibrate(
+    judge: Judge,
+    samples: Sequence[tuple[str, Answer, list[Chunk]]],
+    *,
+    max_flip_rate: float = MAX_FLIP_RATE,
+) -> CalibrationResult:
+    """Judge each sample twice, once with the chunk order reversed, and count flips.
+
+    A judge whose verdict depends on the order of its inputs is not measuring grounding —
+    it is measuring position. Better to learn that once, here, than to pay for it on
+    every run and discover it when a gate fires for no reason.
+    """
+    samples = list(samples)
+    if not samples:
+        raise ValueError("cannot calibrate: no samples supplied")
+
+    flips = 0
+    for question, answer, chunks in samples:
+        first = judge.assess(question, answer, chunks)
+        second = judge.assess(question, answer, list(reversed(chunks)))
+        if first is None or second is None:
+            flips += 1  # an unusable verdict is at least as bad as an unstable one
+            continue
+        if first.faithfulness != second.faithfulness:
+            flips += 1
+
+    rate = flips / len(samples)
+    return CalibrationResult(
+        cases=len(samples),
+        flips=flips,
+        flip_rate=rate,
+        trustworthy=rate <= max_flip_rate,
+    )

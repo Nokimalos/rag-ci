@@ -142,3 +142,109 @@ def test_using_the_judge_without_the_extra_is_actionable():
         return
     with pytest.raises(RuntimeError, match=r"rag-ci\[generate\]"):
         judge_module.AnthropicJudge()
+
+
+class _StableJudge:
+    def assess(self, question, answer, chunks):
+        return Verdict(claims=[Claim(text="a", supported=True, supporting_chunk=0)])
+
+
+class _OrderSensitiveJudge:
+    """Verdict depends on which chunk happens to come first — the failure to catch."""
+
+    def assess(self, question, answer, chunks):
+        if chunks and chunks[0].doc_id == "d1":
+            return Verdict(claims=[Claim(text="a", supported=True, supporting_chunk=0)])
+        return Verdict(claims=[Claim(text="a", supported=False)])
+
+
+class _CountingJudge(_StableJudge):
+    def __init__(self):
+        self.calls = 0
+
+    def assess(self, question, answer, chunks):
+        self.calls += 1
+        return super().assess(question, answer, chunks)
+
+
+class _RecordingJudge(_StableJudge):
+    def __init__(self):
+        self.seen: list[list[str]] = []
+
+    def assess(self, question, answer, chunks):
+        self.seen.append([c.doc_id for c in chunks])
+        return super().assess(question, answer, chunks)
+
+
+class _HalfFlakyJudge:
+    """Flips on half the samples, to exercise the threshold."""
+
+    def __init__(self):
+        self.sample = -1
+        self.pass_index = 0
+
+    def assess(self, question, answer, chunks):
+        self.pass_index += 1
+        if self.pass_index % 2 == 1:
+            self.sample += 1
+            return Verdict(claims=[Claim(text="a", supported=True, supporting_chunk=0)])
+        if self.sample % 2 == 0:
+            return Verdict(claims=[Claim(text="a", supported=False)])
+        return Verdict(claims=[Claim(text="a", supported=True, supporting_chunk=0)])
+
+
+def _samples(n: int):
+    return [
+        ("q", Answer(text="a", cited_chunks=[_chunk("d1")]), [_chunk("d1"), _chunk("d2")])
+        for _ in range(n)
+    ]
+
+
+def test_a_stable_judge_never_flips():
+    from ragci.judge import calibrate
+
+    result = calibrate(_StableJudge(), _samples(10))
+    assert result.flip_rate == 0.0
+    assert result.trustworthy is True
+
+
+def test_an_order_sensitive_judge_is_caught():
+    from ragci.judge import calibrate
+
+    # A judge whose verdict depends on input order is not measuring grounding.
+    result = calibrate(_OrderSensitiveJudge(), _samples(10))
+    assert result.flip_rate == 1.0
+    assert result.trustworthy is False
+
+
+def test_the_threshold_is_configurable():
+    from ragci.judge import calibrate
+
+    flaky = calibrate(_HalfFlakyJudge(), _samples(10), max_flip_rate=0.6)
+    assert flaky.flip_rate == pytest.approx(0.5)
+    assert flaky.trustworthy is True
+    assert calibrate(_HalfFlakyJudge(), _samples(10), max_flip_rate=0.1).trustworthy is False
+
+
+def test_each_sample_is_judged_twice():
+    from ragci.judge import calibrate
+
+    judge = _CountingJudge()
+    calibrate(judge, _samples(4))
+    assert judge.calls == 8
+
+
+def test_the_permuted_pass_reverses_chunk_order():
+    from ragci.judge import calibrate
+
+    judge = _RecordingJudge()
+    calibrate(judge, _samples(1))
+    first, second = judge.seen
+    assert second == list(reversed(first))
+
+
+def test_calibrating_with_no_samples_is_rejected():
+    from ragci.judge import calibrate
+
+    with pytest.raises(ValueError, match="no samples"):
+        calibrate(_StableJudge(), [])
