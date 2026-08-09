@@ -25,6 +25,9 @@ dependencies = [
     "numpy>=2.1",
 ]
 
+[project.optional-dependencies]
+generate = ["anthropic>=0.60"]
+
 [project.urls]
 Homepage = "https://github.com/Nokimalos/rag-ci"
 Repository = "https://github.com/Nokimalos/rag-ci"
