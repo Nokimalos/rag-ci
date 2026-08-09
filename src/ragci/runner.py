@@ -1,6 +1,7 @@
 """Execute golden cases against an adapter and summarise the result."""
 
 import asyncio
+import inspect
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -49,11 +50,24 @@ class RunRecord(BaseModel):
     timings: Timings = Field(default_factory=Timings)
 
 
+async def _call(func, *args):
+    """Call an adapter method whether it is sync or async.
+
+    Most modern RAG stacks are async — vector-db clients, FastAPI handlers, anything
+    doing network I/O. Passing a coroutine function to to_thread returns the coroutine
+    unawaited, which surfaces as an unrelated Pydantic validation error several frames
+    later. Ask first.
+    """
+    if inspect.iscoroutinefunction(func):
+        return await func(*args)
+    # Synchronous adapters run off the event loop so one slow call cannot block the rest.
+    return await asyncio.to_thread(func, *args)
+
+
 async def _run_one(adapter, case: GoldenCase, index, config, semaphore) -> CaseResult:
     async with semaphore:
         try:
-            # User adapters are ordinary synchronous code; keep the event loop free.
-            trace = await asyncio.to_thread(adapter.retrieve, case.question, index, config)
+            trace = await _call(adapter.retrieve, case.question, index, config)
         except Exception as exc:  # noqa: BLE001 - any adapter failure is a case error
             return CaseResult(case_id=case.id, status="error", error=f"{type(exc).__name__}: {exc}")
         return CaseResult(case_id=case.id, status="ok", trace=trace)
@@ -101,9 +115,7 @@ async def run_cases(
             if result.status != "ok" or result.trace is None:
                 continue
             try:
-                answer = await asyncio.to_thread(
-                    adapter.answer, case.question, result.trace, config
-                )
+                answer = await _call(adapter.answer, case.question, result.trace, config)
                 verdict = judge.assess(case.question, answer, result.trace.all_chunks)
             except Exception:  # noqa: BLE001 - a judge outage is not a retrieval failure
                 verdict = None
