@@ -1,8 +1,10 @@
 """Searching the configuration space without evaluating all of it."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from itertools import product
 from typing import Any
+
+from pydantic import BaseModel
 
 from ragci.contract import AdapterSpec
 
@@ -37,9 +39,7 @@ def order_by_index_cost(configs: Sequence[Config], index_keys: Sequence[str]) ->
     On a large corpus, rebuilding is the dominant cost of a sweep — ordering the grid
     is the difference between one reindex per index and one per configuration.
     """
-    return sorted(
-        configs, key=lambda c: (index_signature(c, index_keys), repr(sorted(c.items())))
-    )
+    return sorted(configs, key=lambda c: (index_signature(c, index_keys), repr(sorted(c.items()))))
 
 
 def count_rebuilds(configs: Sequence[Config], index_keys: Sequence[str]) -> int:
@@ -51,3 +51,93 @@ def count_rebuilds(configs: Sequence[Config], index_keys: Sequence[str]) -> int:
             rebuilds += 1
             previous = signature
     return rebuilds
+
+
+class Rung(BaseModel):
+    index: int
+    n_configs: int
+    n_cases: int
+
+
+class SweepEvaluation(BaseModel):
+    config: Config
+    score: float
+    n_cases: int
+    rung: int
+
+
+class SweepOutcome(BaseModel):
+    winner: Config
+    evaluations: list[SweepEvaluation]
+    rungs: list[Rung]
+    evaluations_run: int
+    full_grid_cost: int
+
+
+def plan_rungs(n_configs: int, n_cases: int, *, eta: int = 3, min_cases: int = 10) -> list[Rung]:
+    """Fewer configurations against more cases at each step.
+
+    A bad configuration should be dropped on cheap evidence; only survivors earn a
+    full evaluation. Total cost is roughly n_configs x min_cases x rungs rather than
+    n_configs x n_cases.
+    """
+    configs_left, cases = n_configs, max(min_cases, 1)
+
+    steps = 1
+    while configs_left > 1 and cases * eta <= n_cases:
+        configs_left = max(1, configs_left // eta)
+        cases *= eta
+        steps += 1
+
+    rungs: list[Rung] = []
+    configs_left, cases = n_configs, max(min_cases, 1)
+    for index in range(steps):
+        is_last = index == steps - 1
+        rungs.append(
+            Rung(index=index, n_configs=configs_left, n_cases=n_cases if is_last else cases)
+        )
+        configs_left = max(1, configs_left // eta)
+        cases *= eta
+    return rungs
+
+
+def _rank(scored: list[tuple[float, Config]]) -> list[tuple[float, Config]]:
+    # Ties break on the configuration's own ordering so a rerun picks the same winner.
+    return sorted(scored, key=lambda pair: (-pair[0], repr(sorted(pair[1].items()))))
+
+
+def successive_halving(
+    configs: Sequence[Config],
+    evaluate: Callable[[Config, int], float],
+    *,
+    n_cases: int,
+    eta: int = 3,
+    min_cases: int = 10,
+) -> SweepOutcome:
+    """Run the grid through shrinking rungs and return the surviving configuration."""
+    if not configs:
+        raise ValueError("cannot sweep: no configurations in the grid")
+
+    rungs = plan_rungs(len(configs), n_cases, eta=eta, min_cases=min_cases)
+    survivors = list(configs)
+    evaluations: list[SweepEvaluation] = []
+
+    for rung in rungs:
+        scored = []
+        for config in survivors:
+            score = evaluate(config, rung.n_cases)
+            evaluations.append(
+                SweepEvaluation(config=config, score=score, n_cases=rung.n_cases, rung=rung.index)
+            )
+            scored.append((score, config))
+        ranked = _rank(scored)
+        keep = max(1, len(ranked) // eta) if rung.index < len(rungs) - 1 else 1
+        survivors = [config for _, config in ranked[:keep]]
+
+    return SweepOutcome(
+        winner=survivors[0],
+        evaluations=evaluations,
+        rungs=rungs,
+        evaluations_run=len(evaluations),
+        full_grid_cost=len(configs) * n_cases,
+    )
