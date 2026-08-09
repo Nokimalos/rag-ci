@@ -84,3 +84,24 @@ def paired_bootstrap_test(
         p_value=float((resampled >= 0.0).mean()),
         n_pairs=len(differences),
     )
+
+
+def holm_bonferroni(p_values: Sequence[float], alpha: float = 0.05) -> list[bool]:
+    """Holm's step-down correction. Returns one verdict per input, in input order.
+
+    Ranking a sweep winner against every runner-up is a family of comparisons: at
+    alpha=0.05 and twenty configurations, one spurious "significantly better" is the
+    expected outcome rather than a surprise.
+    """
+    if any(not 0.0 <= p <= 1.0 for p in p_values):
+        raise ValueError("p-values must be between 0 and 1")
+
+    ordered = sorted(range(len(p_values)), key=lambda i: p_values[i])
+    verdicts = [False] * len(p_values)
+    remaining = len(p_values)
+
+    for rank, index in enumerate(ordered):
+        if p_values[index] > alpha / (remaining - rank):
+            break  # step-down: everything ranked above this survives too
+        verdicts[index] = True
+    return verdicts

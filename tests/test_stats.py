@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ragci.stats import bootstrap_ci, paired_bootstrap_test
+from ragci.stats import bootstrap_ci, holm_bonferroni, paired_bootstrap_test
 
 
 def test_mean_is_the_sample_mean():
@@ -139,3 +139,43 @@ def test_paired_test_is_reproducible():
     a = [0.1, 0.5, 0.9, 0.3, 0.7]
     b = [0.2, 0.4, 0.8, 0.4, 0.6]
     assert paired_bootstrap_test(a, b, seed=5) == paired_bootstrap_test(a, b, seed=5)
+
+
+def test_a_single_comparison_is_plain_thresholding():
+    assert holm_bonferroni([0.04]) == [True]
+    assert holm_bonferroni([0.06]) == [False]
+
+
+def test_verdicts_come_back_in_input_order():
+    assert holm_bonferroni([0.9, 0.001, 0.9]) == [False, True, False]
+
+
+def test_the_smallest_p_faces_the_strictest_threshold():
+    # Three comparisons: the smallest must beat alpha/3 = 0.0167.
+    assert holm_bonferroni([0.02, 0.03, 0.04]) == [False, False, False]
+    assert holm_bonferroni([0.01, 0.03, 0.04]) == [True, False, False]
+
+
+def test_holm_is_more_powerful_than_plain_bonferroni():
+    # Bonferroni would need every p below 0.05/3; Holm relaxes after each rejection.
+    assert holm_bonferroni([0.001, 0.02, 0.9])[:2] == [True, True]
+
+
+def test_rejection_stops_at_the_first_failure_in_sorted_order():
+    # Sorted: 0.001, 0.002, 0.9. The first two clear their thresholds (0.0167, 0.025);
+    # 0.9 does not, so nothing ranked above it can be rejected either. Step-down runs
+    # over sorted order, not input order — both small values are rejected.
+    assert holm_bonferroni([0.001, 0.9, 0.002]) == [True, False, True]
+
+
+def test_an_empty_family_is_an_empty_verdict():
+    assert holm_bonferroni([]) == []
+
+
+def test_alpha_is_configurable():
+    assert holm_bonferroni([0.08], alpha=0.10) == [True]
+
+
+def test_a_p_value_outside_zero_to_one_is_rejected():
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        holm_bonferroni([1.5])
