@@ -11,6 +11,13 @@ from ragci.stats import MetricSummary
 
 runner = CliRunner()
 
+
+def _out(result) -> str:
+    """stdout with wrapping collapsed: rich breaks lines at terminal width,
+    which differs between a laptop and a CI runner with longer tmp paths."""
+    return " ".join(result.stdout.split())
+
+
 ADAPTER_SOURCE = """
 from ragci.contract import Chunk, RetrievalTrace, Step, adapter
 
@@ -83,7 +90,7 @@ def test_run_reports_metrics_and_writes_the_record(tmp_path):
         ],
     )
     assert result.exit_code == 0
-    assert "recall@3" in result.stdout
+    assert "recall@3" in _out(result)
     payload = json.loads(out.read_text())
     assert payload["metrics"]["recall@3"]["mean"] == 1.0
     assert payload["golden_hash"]
@@ -101,7 +108,7 @@ def test_run_exits_nonzero_when_the_adapter_always_fails(tmp_path):
     )
     result = runner.invoke(app, ["run", "--adapter", str(broken), "--golden", str(golden_path)])
     assert result.exit_code == 2
-    assert "INVALID" in result.stdout
+    assert "INVALID" in _out(result)
 
 
 def test_run_fails_clearly_when_the_module_has_no_adapter(tmp_path):
@@ -119,7 +126,7 @@ def test_run_uses_the_adapter_declared_primary_metric_by_default(tmp_path):
         app, ["run", "--adapter", str(adapter_path), "--golden", str(golden_path)]
     )
     assert result.exit_code == 0
-    assert "recall@3" in result.stdout
+    assert "recall@3" in _out(result)
 
 
 GATE_METRIC = "recall@10"
@@ -150,7 +157,7 @@ def test_gate_passes_on_an_identical_run(tmp_path):
     save_json(_gate_record(0.0), run)
     result = runner.invoke(app, ["gate", "--run", str(run), "--baseline", str(baseline)])
     assert result.exit_code == 0
-    assert "Pass" in result.stdout
+    assert "Pass" in _out(result)
 
 
 def test_gate_fails_on_a_regression(tmp_path):
@@ -159,7 +166,7 @@ def test_gate_fails_on_a_regression(tmp_path):
     save_json(_gate_record(0.0), run)
     result = runner.invoke(app, ["gate", "--run", str(run), "--baseline", str(baseline)])
     assert result.exit_code == 1
-    assert "Fail" in result.stdout
+    assert "Fail" in _out(result)
 
 
 def test_gate_exits_two_when_the_baseline_is_stale(tmp_path):
@@ -177,7 +184,7 @@ def test_gate_passes_and_explains_when_there_is_no_baseline(tmp_path):
         app, ["gate", "--run", str(run), "--baseline", str(tmp_path / "absent.json")]
     )
     assert result.exit_code == 0
-    assert "No baseline" in result.stdout
+    assert "No baseline" in _out(result)
 
 
 def test_gate_writes_the_markdown_report(tmp_path):
@@ -253,7 +260,7 @@ def test_golden_gen_reports_coverage_and_writes_candidates(tmp_path, monkeypatch
         app, ["golden", "gen", "--corpus", str(corpus), "--out", str(out), "--sample", "5"]
     )
     assert result.exit_code == 0
-    assert "2 strata" in result.stdout
+    assert "2 strata" in _out(result)
     assert out.exists()
 
 
@@ -267,13 +274,13 @@ def test_golden_gen_without_the_anthropic_extra_says_how_to_install(tmp_path, mo
     monkeypatch.setattr(gen, "_anthropic_available", lambda: False)
     result = runner.invoke(app, ["golden", "gen", "--corpus", str(corpus)])
     assert result.exit_code != 0
-    assert "rag-ci[generate]" in result.stdout
+    assert "rag-ci[generate]" in _out(result)
 
 
 def test_golden_gen_rejects_a_missing_corpus(tmp_path):
     result = runner.invoke(app, ["golden", "gen", "--corpus", str(tmp_path / "nope")])
     assert result.exit_code != 0
-    assert "does not exist" in result.stdout
+    assert "does not exist" in _out(result)
 
 
 def test_golden_review_accepts_and_writes(tmp_path):
@@ -318,4 +325,4 @@ def test_golden_review_with_nothing_pending_says_so(tmp_path):
         app, ["golden", "review", "--candidates", str(candidates), "--golden", str(golden)]
     )
     assert result.exit_code == 0
-    assert "nothing" in result.stdout.lower()
+    assert "nothing" in _out(result).lower()
