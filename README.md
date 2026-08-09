@@ -7,8 +7,8 @@
 Regression testing and configuration sweeps for RAG pipelines.
 
 > **Status: usable.** Build a golden set, measure against it, gate pull requests on the
-> result, and sweep configurations to find what actually wins — including as a GitHub
-> Action. See [the design document](docs/design.md).
+> result, sweep configurations to find what actually wins, and score answer grounding —
+> including as a GitHub Action. See [the design document](docs/design.md).
 
 ## The problem
 
@@ -39,12 +39,14 @@ uvx rag-ci golden review   # accept / edit / reject, then commit     ✅
 uvx rag-ci run             # measure, with confidence intervals      ✅
 uvx rag-ci gate            # fail the PR only on a real regression   ✅
 uvx rag-ci sweep           # find the configuration that wins        ✅
+uvx rag-ci run --judge     # score answer grounding, not just recall ✅
+uvx rag-ci judge calibrate # check the judge before trusting it      ✅
 ```
 
 Generating questions needs the optional extra and an `ANTHROPIC_API_KEY`
 (`uvx "rag-ci[generate]" golden gen …`). Everything else installs and runs with no model
 dependency at all. See [docs/golden-sets.md](docs/golden-sets.md) and
-[docs/sweeps.md](docs/sweeps.md).
+[docs/sweeps.md](docs/sweeps.md), and [docs/judging.md](docs/judging.md).
 
 ## Use it in CI
 
@@ -61,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Nokimalos/rag-ci@v0.3.0
+      - uses: Nokimalos/rag-ci@v0.4.0
         with:
           adapter: ragci_adapter.py
           golden: tests/golden.jsonl
