@@ -405,3 +405,112 @@ def test_sweep_rejects_an_undeclared_parameter(tmp_path):
     )
     assert result.exit_code != 0
     assert "not declared" in _out(result)
+
+
+JUDGING_ADAPTER = """
+from ragci.contract import Answer, Chunk, ParamSpec, RetrievalTrace, Step, adapter
+
+DOC = "Gravity is the attraction between masses and Einstein recast it as curvature."
+
+
+@adapter(query_time_params=[ParamSpec(name="top_k", values=[1, 3])], primary_metric="recall@3")
+class AnsweringRag:
+    def retrieve(self, query, index, config):
+        chunk = Chunk(text=DOC, doc_id="physics", char_start=0, char_end=len(DOC))
+        return RetrievalTrace(steps=[Step(query=query, chunks=[chunk])], latency_ms=1.0)
+
+    def answer(self, query, trace, config):
+        return Answer(text=DOC, cited_chunks=trace.all_chunks[:1], latency_ms=1.0)
+"""
+
+
+def _judging_workspace(tmp_path):
+    adapter_path = tmp_path / "ragci_adapter.py"
+    adapter_path.write_text(JUDGING_ADAPTER)
+    _, golden_path = _write_workspace(tmp_path)
+    adapter_path.write_text(JUDGING_ADAPTER)  # _write_workspace overwrote it
+    return adapter_path, golden_path
+
+
+def _install_fake_judge(monkeypatch):
+    import ragci.cli as cli
+    from tests.fakes import FakeJudge
+
+    monkeypatch.setattr(cli, "_build_judge", lambda model: FakeJudge())
+
+
+def test_run_with_judge_reports_faithfulness(tmp_path, monkeypatch):
+    adapter_path, golden_path = _judging_workspace(tmp_path)
+    _install_fake_judge(monkeypatch)
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--adapter",
+            str(adapter_path),
+            "--golden",
+            str(golden_path),
+            "--metric",
+            "recall@3",
+            "--judge",
+            "--out",
+            str(tmp_path / "run.json"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "faithfulness" in _out(result)
+
+
+def test_run_without_judge_reports_no_tier_two(tmp_path):
+    adapter_path, golden_path = _judging_workspace(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--adapter",
+            str(adapter_path),
+            "--golden",
+            str(golden_path),
+            "--metric",
+            "recall@3",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "faithfulness" not in _out(result)
+
+
+def test_judge_calibrate_passes_a_stable_judge(tmp_path, monkeypatch):
+    adapter_path, golden_path = _judging_workspace(tmp_path)
+    _install_fake_judge(monkeypatch)
+    result = runner.invoke(
+        app,
+        ["judge", "calibrate", "--adapter", str(adapter_path), "--golden", str(golden_path)],
+    )
+    assert result.exit_code == 0
+    assert "flip rate" in _out(result).lower()
+
+
+def test_judge_calibrate_fails_an_unstable_judge(tmp_path, monkeypatch):
+    adapter_path, golden_path = _judging_workspace(tmp_path)
+
+    class Unstable:
+        def __init__(self):
+            self.n = 0
+
+        def assess(self, question, answer, chunks):
+            from ragci.judge import Claim, Verdict
+
+            self.n += 1
+            if self.n % 2 == 0:
+                return Verdict(claims=[Claim(text="a", supported=False)])
+            return Verdict(claims=[Claim(text="a", supported=True, supporting_chunk=0)])
+
+    import ragci.cli as cli
+
+    monkeypatch.setattr(cli, "_build_judge", lambda model: Unstable())
+    result = runner.invoke(
+        app,
+        ["judge", "calibrate", "--adapter", str(adapter_path), "--golden", str(golden_path)],
+    )
+    assert result.exit_code != 0
+    assert "not trustworthy" in _out(result).lower()

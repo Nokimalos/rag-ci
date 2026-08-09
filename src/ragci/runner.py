@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from ragci.contract import RetrievalTrace
 from ragci.golden import GoldenCase
+from ragci.judge import Judge, Verdict, citation_accuracy
 from ragci.matching import is_fallback_match
 from ragci.metrics import TIER1_METRICS, parse_metric_name
 from ragci.stats import MetricSummary, bootstrap_ci
@@ -22,6 +23,7 @@ class CaseResult(BaseModel):
     error: str | None = None
     trace: RetrievalTrace | None = None
     scores: dict[str, float] = Field(default_factory=dict)
+    verdict: Verdict | None = None
 
 
 class Timings(BaseModel):
@@ -40,6 +42,7 @@ class RunRecord(BaseModel):
     error_rate: float = 0.0
     valid: bool = True
     degraded_matching: bool = False
+    judged: bool = False
     # Cost and token counts are deterministic, so unlike timings they stay in the diff.
     cost_usd_per_query: float | None = None
     tokens_per_query: float | None = None
@@ -66,6 +69,7 @@ async def run_cases(
     index: Any = None,
     concurrency: int = 8,
     seed: int = 0,
+    judge: Judge | None = None,
 ) -> RunRecord:
     cases = list(cases)
     if not cases:
@@ -90,6 +94,30 @@ async def run_cases(
             score = TIER1_METRICS[base](result.trace, case, k)
             result.scores[name] = score
             per_metric[name].append(score)
+
+    judged = False
+    if judge is not None and hasattr(adapter, "answer"):
+        for case, result in zip(cases, results, strict=True):
+            if result.status != "ok" or result.trace is None:
+                continue
+            try:
+                answer = await asyncio.to_thread(
+                    adapter.answer, case.question, result.trace, config
+                )
+                verdict = judge.assess(case.question, answer, result.trace.all_chunks)
+            except Exception:  # noqa: BLE001 - a judge outage is not a retrieval failure
+                verdict = None
+            if verdict is None:
+                continue
+            judged = True
+            result.verdict = verdict
+            if verdict.faithfulness is not None:
+                result.scores["faithfulness"] = verdict.faithfulness
+                per_metric.setdefault("faithfulness", []).append(verdict.faithfulness)
+            accuracy = citation_accuracy(answer, verdict, result.trace.all_chunks)
+            if accuracy is not None:
+                result.scores["citation_accuracy"] = accuracy
+                per_metric.setdefault("citation_accuracy", []).append(accuracy)
 
     errors = sum(result.status == "error" for result in results)
     error_rate = errors / len(cases)
@@ -116,6 +144,7 @@ async def run_cases(
         # Above the threshold the run says nothing about quality — it says the plumbing broke.
         valid=error_rate <= MAX_ERROR_RATE,
         degraded_matching=degraded,
+        judged=judged,
         cost_usd_per_query=float(np.mean(costs)) if costs else None,
         tokens_per_query=float(np.mean(token_counts)) if token_counts else None,
         timings=Timings(

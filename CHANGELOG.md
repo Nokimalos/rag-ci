@@ -8,6 +8,33 @@ While the version stays below 1.0, the adapter contract may change in a minor re
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-09
+
+Tier 2: answer grounding, and a way to check the judge measuring it.
+
+### Added
+
+- **`rag-ci run --judge`** — scores **faithfulness** (the fraction of the answer's factual
+  claims the retrieved passages actually support) and **citation accuracy** (the fraction of
+  the answer's citations that did any work). Per claim rather than a single verdict, so the
+  run record can name the sentence that was invented.
+- **`rag-ci judge calibrate`** — judges a sample twice, once with the passage order
+  reversed, and reports the flip rate. Exits non-zero above the threshold. A judge whose
+  verdict depends on input order is measuring position, not grounding, and its scores
+  should not gate anything.
+- **`docs/judging.md`**, including the cost (one model call per case) and why judge noise
+  can only hide a regression, never manufacture one.
+
+### Notes
+
+- Requires an adapter implementing `answer()` and the optional extra. Retrieval-only
+  adapters are told so rather than scored as zeros.
+- Faithfulness and citation accuracy are `None`, not `0.0`, when there is nothing to
+  measure — an answer asserting nothing is not unfaithful, and one citing nothing has no
+  citation accuracy.
+- A judge outage leaves tier-1 metrics intact and the run valid.
+
+
 ## [0.3.0] — 2026-08-09
 
 Configuration sweeps. The design document is now fully delivered.
@@ -96,7 +123,8 @@ First release. Measures retrieval quality and gates pull requests on it.
 - Generation metrics (faithfulness, citation accuracy) are not implemented yet — only
   retrieval is measured.
 
-[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.1.0
