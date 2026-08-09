@@ -76,8 +76,9 @@ tier 2, which is a separate concern.
 
 ## Writing an adapter for your own stack
 
-Run `uvx rag-ci init` and fill in `retrieve()`. Report `char_start` and `char_end` on your
-chunks whenever you can — with exact offsets rag-ci matches chunks to passages precisely,
+Run `uvx rag-ci init` and fill in `retrieve()`. It may be `async def` — rag-ci awaits it,
+along with `answer()` and `build_index()`, so an async stack needs no wrapper. Report
+`char_start` and `char_end` on your chunks whenever you can — with exact offsets rag-ci matches chunks to passages precisely,
 and without them it falls back to token overlap and flags the run as degraded.
 
 If your stack makes the contract awkward, that is useful information. Open an issue with

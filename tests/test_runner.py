@@ -263,3 +263,50 @@ async def test_the_verdict_is_kept_on_the_case_result():
         judge=FakeJudge(),
     )
     assert record.case_results[0].verdict is not None
+
+
+class AsyncRag:
+    """Most modern RAG stacks are async: vector-db clients, FastAPI, network calls."""
+
+    def __init__(self, answering: bool = False):
+        self._inner = ReferenceRag()
+        if answering:
+            self.answer = self._answer
+
+    async def retrieve(self, query, index, config):
+        return self._inner.retrieve(query, index, config)
+
+    async def _answer(self, query, trace, config):
+        from ragci.contract import Answer
+
+        return Answer(text="Gravity.", cited_chunks=trace.all_chunks[:1], latency_ms=1.0)
+
+
+async def test_an_async_retrieve_is_awaited():
+    record = await run_cases(
+        AsyncRag(), CASES, config={"top_k": 5}, metric_names=["recall@5"], golden_hash="h"
+    )
+    assert all(r.status == "ok" for r in record.case_results)
+    assert record.metrics["recall@5"].n == len(CASES)
+
+
+async def test_an_async_adapter_scores_the_same_as_a_sync_one():
+    kwargs = dict(config={"top_k": 5}, metric_names=["recall@5"], golden_hash="h")
+    sync = await run_cases(ReferenceRag(), CASES, **kwargs)
+    asynchronous = await run_cases(AsyncRag(), CASES, **kwargs)
+    assert sync.metrics["recall@5"].mean == asynchronous.metrics["recall@5"].mean
+
+
+async def test_an_async_answer_is_awaited():
+    from tests.fakes import FakeJudge
+
+    record = await run_cases(
+        AsyncRag(answering=True),
+        CASES,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(),
+    )
+    assert record.judged is True
+    assert "faithfulness" in record.metrics

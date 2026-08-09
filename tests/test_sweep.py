@@ -283,3 +283,26 @@ def test_a_tie_away_from_the_cut_is_not_arbitrary():
         [{"k": i} for i in range(9)], lambda config, n: scores[config["k"]], n_cases=90
     )
     assert outcome.arbitrary_elimination is False
+
+
+async def test_an_async_build_index_is_awaited():
+    class AsyncIndexing:
+        __ragci_spec__ = ReferenceRag.__ragci_spec__
+
+        def __init__(self):
+            self._inner = ReferenceRag()
+            self.builds = 0
+
+        async def build_index(self, corpus, config):
+            self.builds += 1
+            return object()
+
+        async def retrieve(self, query, index, config):
+            return self._inner.retrieve(query, index, config)
+
+    adapter = AsyncIndexing()
+    outcome = await sweep_adapter(
+        adapter, _cases(), spec=AsyncIndexing.__ragci_spec__, metric="recall@3"
+    )
+    assert adapter.builds > 0
+    assert set(outcome.winner) <= {"chunk_size", "top_k"}

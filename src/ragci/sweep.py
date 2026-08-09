@@ -220,7 +220,7 @@ async def sweep_adapter(
     corpus: Any = None,
 ) -> SweepOutcome:
     """Sweep a real adapter, rebuilding its index as rarely as the grid allows."""
-    from ragci.runner import run_cases  # local: keeps sweep importable on its own
+    from ragci.runner import _call, run_cases  # local: keeps sweep importable on its own
 
     cases = list(cases)
     if not cases:
@@ -237,7 +237,7 @@ async def sweep_adapter(
             signature = index_signature(config, index_keys)
             if signature not in built:
                 built.clear()  # one live index at a time: they can be large
-                built[signature] = adapter.build_index(corpus, config)
+                built[signature] = await _call(adapter.build_index, corpus, config)
             index = built[signature]
         record = await run_cases(
             adapter,

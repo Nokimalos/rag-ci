@@ -20,6 +20,9 @@ class MyRag:
 
         Report char_start/char_end whenever you can: exact offsets let rag-ci match
         chunks to passages precisely instead of falling back to token overlap.
+
+        May be `async def` — rag-ci awaits it. The same goes for answer() and
+        build_index(), so an async pipeline needs no wrapper.
         """
         raise NotImplementedError
 
