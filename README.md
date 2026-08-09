@@ -2,9 +2,9 @@
 
 Regression testing and configuration sweeps for RAG pipelines.
 
-> **Status: design phase.** The design is complete and reviewed; no implementation has
-> landed yet. Read [the design spec](docs/superpowers/specs/2026-08-09-rag-ci-design.md) to
-> see where this is going.
+> **Status: early.** `rag-ci init` and `rag-ci run` work today — write an adapter, bring a
+> golden set, get tier-1 metrics with confidence intervals. `gate`, `sweep`, and golden-set
+> generation are next; see [the design spec](docs/superpowers/specs/2026-08-09-rag-ci-design.md).
 
 ## The problem
 
