@@ -29,10 +29,14 @@ runs:
       with:
         enable-cache: true
 
+    # Pinned so that `uses: Nokimalos/rag-ci@vX.Y.Z` runs CLI X.Y.Z and not whatever is
+    # latest on PyPI. Bump this together with the version in pyproject.toml.
     - name: Measure
       shell: bash
+      env:
+        RAGCI_VERSION: "0.1.0"
       run: |
-        uvx rag-ci run \
+        uvx "rag-ci==${RAGCI_VERSION}" run \
           --adapter "${{ inputs.adapter }}" \
           --golden "${{ inputs.golden }}" \
           ${{ inputs.metric && format('--metric {0}', inputs.metric) || '' }} \
@@ -41,8 +45,10 @@ runs:
     - name: Gate
       id: gate
       shell: bash
+      env:
+        RAGCI_VERSION: "0.1.0"
       run: |
-        uvx rag-ci gate \
+        uvx "rag-ci==${RAGCI_VERSION}" gate \
           --run .ragci/run.json \
           --baseline "${{ inputs.baseline }}" \
           --min-effect "${{ inputs.min-effect }}" \

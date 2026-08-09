@@ -5,12 +5,31 @@ description = "Regression testing and configuration sweeps for RAG pipelines."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
+authors = [{ name = "Kaan Bouldoires" }]
+keywords = ["rag", "retrieval", "evaluation", "llm", "testing", "ci", "benchmark"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.9",
     "typer>=0.15",
     "rich>=13.9",
     "numpy>=2.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Nokimalos/rag-ci"
+Repository = "https://github.com/Nokimalos/rag-ci"
+Issues = "https://github.com/Nokimalos/rag-ci/issues"
+Changelog = "https://github.com/Nokimalos/rag-ci/blob/main/CHANGELOG.md"
 
 [project.scripts]
 rag-ci = "ragci.cli:app"
@@ -28,6 +47,20 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ragci"]
+
+[tool.hatch.build.targets.sdist]
+# Explicit allowlist: hatchling otherwise sweeps in local working state such as .ragci/.
+include = [
+    "src/ragci",
+    "tests",
+    "examples",
+    "docs",
+    "action.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

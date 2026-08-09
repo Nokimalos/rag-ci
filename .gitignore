@@ -15,9 +15,9 @@ venv/
 .coverage
 htmlcov/
 
-# rag-ci working state
-.ragci/cache/
-.ragci/runs/
+# rag-ci working state. This repo's own baseline lives in examples/reference/;
+# a user project would commit .ragci/baseline.json instead of ignoring it.
+.ragci/
 
 # Secrets
 .env
