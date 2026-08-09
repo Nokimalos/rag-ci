@@ -1,11 +1,58 @@
 name: release
 
+# The version bump is the trigger. A pull request that changes `version` in
+# pyproject.toml is a release PR — it goes through review and CI like any other, and
+# merging it publishes. Tagging is an output of this workflow, not an input: a workflow
+# that pushes a tag with GITHUB_TOKEN cannot trigger another workflow, so a separate
+# tag-then-release pair would silently never publish.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["pyproject.toml"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report what would happen, without tagging or publishing"
+        type: boolean
+        default: true
 
 jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Decide whether this version needs releasing
+        id: check
+        run: |
+          version=$(uv version --short)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # Idempotent by construction: the question is not "did the version change"
+          # but "does this version already have a tag". Re-running is harmless.
+          if git rev-parse "v$version" >/dev/null 2>&1; then
+            echo "v$version is already tagged; nothing to release." >> "$GITHUB_STEP_SUMMARY"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Dry run: would release v$version." >> "$GITHUB_STEP_SUMMARY"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing v$version." >> "$GITHUB_STEP_SUMMARY"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -14,17 +61,8 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      - name: Refuse to publish a tag that disagrees with pyproject.toml
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          packaged=$(uv version --short)
-          if [ "$tag" != "$packaged" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match version $packaged in pyproject.toml." >&2
-            exit 1
-          fi
-
-      # A PyPI version number can never be reused, so the suite runs once more here even
-      # though CI already passed on the commit.
+      # A PyPI version number can never be reused, so the suite runs once more here
+      # even though CI already passed on the commit.
       - run: uv sync --locked --dev
       - run: uv run pytest -q
 
@@ -35,7 +73,7 @@ jobs:
           path: dist/
 
   publish:
-    needs: build
+    needs: [detect, build]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -47,8 +85,10 @@ jobs:
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
 
-  github-release:
-    needs: publish
+  # Tag and GitHub release come last: PyPI is the irreversible step, and a tag that
+  # exists without a published package would make the next run skip it.
+  tag-and-release:
+    needs: [detect, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,7 +98,12 @@ jobs:
         with:
           name: dist
           path: dist/
-      - name: Create the GitHub release
+      - name: Tag the commit and publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          gh release create "v$VERSION" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --generate-notes

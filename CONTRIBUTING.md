@@ -83,6 +83,11 @@ and without them it falls back to token overlap and flags the run as degraded.
 If your stack makes the contract awkward, that is useful information. Open an issue with
 the details.
 
+## Releasing
+
+A release is a pull request that bumps the version in `pyproject.toml`; merging it
+publishes to PyPI automatically. See [`docs/releasing.md`](docs/releasing.md).
+
 ## Reporting a bug
 
 Include the rag-ci version (`uvx rag-ci --version`), your Python version, and the smallest
