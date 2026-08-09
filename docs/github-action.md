@@ -1,4 +1,7 @@
-# Using rag-ci in CI
+# Using rag-ci in GitHub Actions
+
+On GitLab, see [docs/gitlab-ci.md](gitlab-ci.md) — the sections below on baselines,
+`min-effect`, pairing and golden-set changes apply there unchanged.
 
 Add this to `.github/workflows/rag-ci.yml`:
 

@@ -74,6 +74,10 @@ an invalid run, or a baseline recorded against a different golden set. See
 [docs/github-action.md](docs/github-action.md) for recording your first baseline and tuning
 `min-effect`.
 
+Not on GitHub? The gate is a CLI, so any runner works. GitLab gets a one-job setup in
+[docs/gitlab-ci.md](docs/gitlab-ci.md), where `allow_failure: exit_codes` maps the `1` / `2`
+split onto the pipeline itself — a distinction GitHub Actions cannot express.
+
 A worked example lives in [`examples/reference/`](examples/reference): an adapter, its
 golden set, and a committed baseline. rag-ci gates it on every pull request to this
 repository.
