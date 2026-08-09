@@ -9,6 +9,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from ragci import __version__
 from ragci.baseline import DEFAULT_ALPHA, DEFAULT_MIN_EFFECT, decide
 from ragci.contract import AdapterSpec
 from ragci.golden import golden_hash, load_golden
@@ -19,6 +20,25 @@ app = typer.Typer(add_completion=False, help="Regression testing for RAG pipelin
 console = Console()
 
 TEMPLATE = Path(__file__).parent / "templates" / "adapter_template.py.txt"
+
+
+def _version_callback(requested: bool) -> None:
+    if requested:
+        console.print(f"rag-ci {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show the version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    """Regression testing and configuration sweeps for RAG pipelines."""
 
 
 def load_adapter(path: Path):
