@@ -220,3 +220,17 @@ def test_min_effect_can_be_tightened_to_block_a_small_drop(tmp_path):
     )
     assert lenient.exit_code == 0
     assert strict.exit_code == 1
+
+
+def test_version_flag_prints_the_package_version():
+    import ragci
+
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert ragci.__version__ in result.stdout
+
+
+def test_version_flag_does_not_require_an_adapter(tmp_path, monkeypatch):
+    # --version must work from any directory, with no adapter and no golden set in sight.
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["--version"]).exit_code == 0

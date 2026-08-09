@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest something rag-ci should do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: `docs/design.md` covers what is already planned — golden-set
+        generation, configuration sweeps, and generation metrics all have a design and are
+        not yet built. If your idea is one of those, an issue saying you need it is still
+        useful; it tells us what to prioritise.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What are you trying to do that rag-ci makes hard or impossible today? Describe the
+        situation rather than the solution — it often turns out there is a better fix than
+        the one that first comes to mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Optional. If you already have a solution in mind, describe it.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do instead today
+      description: Optional, but it tells us how much this actually costs you.
