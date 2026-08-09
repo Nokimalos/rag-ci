@@ -1,0 +1,49 @@
+{
+  "case_results": [
+    {
+      "case_id": "q1",
+      "error": null,
+      "scores": {
+        "recall@3": 1.0
+      },
+      "status": "ok",
+      "trace": {
+        "cost_usd": null,
+        "latency_ms": 1.0,
+        "steps": [
+          {
+            "chunks": [
+              {
+                "char_end": 77,
+                "char_start": 0,
+                "doc_id": "physics",
+                "score": null,
+                "text": "Gravity is the attraction between masses and Einstein recast it as curvature."
+              }
+            ],
+            "query": "What curves spacetime?"
+          }
+        ],
+        "tokens": null
+      }
+    }
+  ],
+  "config": {
+    "top_k": 10
+  },
+  "cost_usd_per_query": null,
+  "degraded_matching": false,
+  "error_rate": 0.0,
+  "golden_hash": "50212951a883401a5a79a7790d8d5620ead09189d62694adc60a73c23682e672",
+  "metrics": {
+    "recall@3": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0,
+      "n": 1
+    }
+  },
+  "primary_metric": "recall@3",
+  "tokens_per_query": null,
+  "valid": true
+}

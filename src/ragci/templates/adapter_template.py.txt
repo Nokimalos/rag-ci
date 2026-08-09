@@ -1,0 +1,28 @@
+"""rag-ci adapter. Wire the two methods below to your own pipeline."""
+
+from ragci.contract import Chunk, ParamSpec, RetrievalTrace, Step, adapter
+
+
+@adapter(
+    # Changing these forces a reindex; the sweep groups by them to rebuild as rarely as possible.
+    index_time_params=[
+        ParamSpec(name="chunk_size", values=[256, 512, 1024]),
+    ],
+    # These are free to vary against an existing index.
+    query_time_params=[
+        ParamSpec(name="top_k", values=[5, 10, 20]),
+    ],
+    primary_metric="recall@10",
+)
+class MyRag:
+    def retrieve(self, query: str, index, config: dict) -> RetrievalTrace:
+        """Return what your pipeline retrieved for this query.
+
+        Report char_start/char_end whenever you can: exact offsets let rag-ci match
+        chunks to passages precisely instead of falling back to token overlap.
+        """
+        raise NotImplementedError
+
+    # Optional: implement to unlock tier-2 generation metrics.
+    # def answer(self, query: str, trace: RetrievalTrace, config: dict) -> Answer:
+    #     ...
