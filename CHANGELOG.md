@@ -8,6 +8,21 @@ While the version stays below 1.0, the adapter contract may change in a minor re
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-09
+
+### Fixed
+
+- **The sweep no longer presents a tie-break as a result.** Found by pointing rag-ci at a
+  real pipeline for the first time: all eight configurations scored identically on the
+  first rung, so the cut was settled alphabetically, and the reported winner then scored
+  *below* six configurations it had supposedly beaten. The outcome now records whether any
+  cut fell inside a group of tied scores, and the report says so plainly instead of
+  printing a confident arrow next to a coin toss.
+- **Scores measured on fewer cases are marked as not comparable.** A configuration showing
+  1.000 on two cases has not beaten one showing 0.833 on six, and the table no longer
+  implies otherwise.
+
+
 ## [0.4.0] — 2026-08-09
 
 Tier 2: answer grounding, and a way to check the judge measuring it.
@@ -123,7 +138,8 @@ First release. Measures retrieval quality and gates pull requests on it.
 - Generation metrics (faithfulness, citation accuracy) are not implemented yet — only
   retrieval is measured.
 
-[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.2.0
