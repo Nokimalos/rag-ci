@@ -28,3 +28,6 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# Implementation plans: process artefacts, deliberately not versioned.
+.plans/
