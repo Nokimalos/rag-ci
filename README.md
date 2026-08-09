@@ -6,8 +6,9 @@
 
 Regression testing and configuration sweeps for RAG pipelines.
 
-> **Status: usable.** `run` and `gate` work end to end, including as a GitHub Action.
-> `sweep` and golden-set generation are next; see [the design document](docs/design.md).
+> **Status: usable.** Build a golden set, measure against it, and gate pull requests on the
+> result — including as a GitHub Action. Configuration sweeps are next; see
+> [the design document](docs/design.md).
 
 ## The problem
 
@@ -33,12 +34,16 @@ the tools practitioners actually run.
 
 ```bash
 uvx rag-ci init            # scaffold an adapter for your pipeline   ✅
+uvx rag-ci golden gen      # generate candidate questions            ✅
+uvx rag-ci golden review   # accept / edit / reject, then commit     ✅
 uvx rag-ci run             # measure, with confidence intervals      ✅
 uvx rag-ci gate            # fail the PR only on a real regression   ✅
-uvx rag-ci golden gen      # generate candidate questions            planned
-uvx rag-ci golden review   # accept / edit / reject, then commit     planned
 uvx rag-ci sweep           # find the configuration that wins        planned
 ```
+
+Generating questions needs the optional extra and an `ANTHROPIC_API_KEY`
+(`uvx "rag-ci[generate]" golden gen …`). Everything else installs and runs with no model
+dependency at all. See [docs/golden-sets.md](docs/golden-sets.md).
 
 ## Use it in CI
 

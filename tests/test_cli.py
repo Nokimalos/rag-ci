@@ -234,3 +234,88 @@ def test_version_flag_does_not_require_an_adapter(tmp_path, monkeypatch):
     # --version must work from any directory, with no adapter and no golden set in sight.
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["--version"]).exit_code == 0
+
+
+def test_golden_gen_reports_coverage_and_writes_candidates(tmp_path, monkeypatch):
+    corpus = tmp_path / "corpus"
+    (corpus / "a").mkdir(parents=True)
+    (corpus / "b").mkdir()
+    for i in range(4):
+        (corpus / "a" / f"{i}.md").write_text("Alpha " * 60, encoding="utf-8")
+    (corpus / "b" / "only.md").write_text("Beta " * 60, encoding="utf-8")
+
+    from tests.fakes import install_fake_generator
+
+    install_fake_generator(monkeypatch)
+
+    out = tmp_path / "candidates.jsonl"
+    result = runner.invoke(
+        app, ["golden", "gen", "--corpus", str(corpus), "--out", str(out), "--sample", "5"]
+    )
+    assert result.exit_code == 0
+    assert "2 strata" in result.stdout
+    assert out.exists()
+
+
+def test_golden_gen_without_the_anthropic_extra_says_how_to_install(tmp_path, monkeypatch):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text("Alpha " * 60, encoding="utf-8")
+
+    import ragci.generate as gen
+
+    monkeypatch.setattr(gen, "_anthropic_available", lambda: False)
+    result = runner.invoke(app, ["golden", "gen", "--corpus", str(corpus)])
+    assert result.exit_code != 0
+    assert "rag-ci[generate]" in result.stdout
+
+
+def test_golden_gen_rejects_a_missing_corpus(tmp_path):
+    result = runner.invoke(app, ["golden", "gen", "--corpus", str(tmp_path / "nope")])
+    assert result.exit_code != 0
+    assert "does not exist" in result.stdout
+
+
+def test_golden_review_accepts_and_writes(tmp_path):
+    from ragci.golden import GoldenCase, Passage, load_golden, save_golden
+
+    candidates, golden = tmp_path / "candidates.jsonl", tmp_path / "golden.jsonl"
+    save_golden(
+        candidates,
+        [
+            GoldenCase(
+                id="q1",
+                question="What is alpha?",
+                required_passages=[
+                    Passage(doc_id="a.md", char_start=0, char_end=20, text="A" * 20)
+                ],
+                provenance="synthetic",
+                strata={"confidence": 0.5},
+            )
+        ],
+    )
+    result = runner.invoke(
+        app,
+        ["golden", "review", "--candidates", str(candidates), "--golden", str(golden)],
+        input="a\n",
+    )
+    assert result.exit_code == 0
+    assert [c.id for c in load_golden(golden)] == ["q1"]
+
+
+def test_golden_review_with_nothing_pending_says_so(tmp_path):
+    from ragci.golden import GoldenCase, Passage, save_golden
+
+    candidates, golden = tmp_path / "candidates.jsonl", tmp_path / "golden.jsonl"
+    case = GoldenCase(
+        id="q1",
+        question="What is alpha?",
+        required_passages=[Passage(doc_id="a.md", char_start=0, char_end=20, text="A" * 20)],
+    )
+    save_golden(candidates, [case])
+    save_golden(golden, [case])
+    result = runner.invoke(
+        app, ["golden", "review", "--candidates", str(candidates), "--golden", str(golden)]
+    )
+    assert result.exit_code == 0
+    assert "nothing" in result.stdout.lower()

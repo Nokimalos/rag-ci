@@ -8,12 +8,17 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from ragci import __version__
 from ragci.baseline import DEFAULT_ALPHA, DEFAULT_MIN_EFFECT, decide
 from ragci.contract import AdapterSpec
-from ragci.golden import golden_hash, load_golden
+from ragci.corpus import CorpusError, load_corpus, sample_with_report
+from ragci.generate import DEFAULT_MODEL, AnthropicGenerator, generate_candidates
+from ragci.golden import golden_hash, load_golden, save_golden
+from ragci.passages import candidate_passages
 from ragci.report import load_json, render_console, render_markdown, save_json
+from ragci.review import ReviewSession, run_review
 from ragci.runner import run_cases
 
 app = typer.Typer(add_completion=False, help="Regression testing for RAG pipelines.")
@@ -58,7 +63,7 @@ def load_adapter(path: Path):
         and isinstance(getattr(value, "__ragci_spec__", None), AdapterSpec)
     ]
     if not candidates:
-        console.print(f"[red]Error:[/] no @adapter class found in {path}")
+        console.print(f"[red]Error:[/] no @adapter class found in {escape(str(path))}")
         raise typer.Exit(code=1)
     return candidates[0]()
 
@@ -68,7 +73,7 @@ def init(path: Path = typer.Option(Path("."), help="Where to write ragci_adapter
     """Scaffold an adapter file."""
     target = Path(path) / "ragci_adapter.py"
     if target.exists():
-        console.print(f"[red]Error:[/] {target} already exists")
+        console.print(f"[red]Error:[/] {escape(str(target))} already exists")
         raise typer.Exit(code=1)
     target.write_text(TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
     console.print(f"Wrote {target}. Implement retrieve(), then run: rag-ci run")
@@ -135,7 +140,7 @@ def gate(
 
     style = "green" if decision.passed else "red"
     verdict = "Pass" if decision.passed else "Fail"
-    console.print(f"[bold {style}]Gate: {verdict}[/] — {decision.message}")
+    console.print(f"[bold {style}]Gate: {verdict}[/] — {escape(decision.message)}")
 
     if markdown is not None:
         Path(markdown).parent.mkdir(parents=True, exist_ok=True)
@@ -147,3 +152,82 @@ def gate(
     # Distinguish "the pipeline got worse" from "I could not tell": CI should treat a
     # broken comparison differently from a genuine quality regression.
     raise typer.Exit(code=1 if decision.reason == "regression" else 2)
+
+
+golden_app = typer.Typer(help="Build and review the golden set.")
+app.add_typer(golden_app, name="golden")
+
+
+def _build_generator(model: str):
+    """Seam for tests: the only place the CLI constructs a real generator."""
+    return AnthropicGenerator(model=model)
+
+
+@golden_app.command("gen")
+def golden_gen(
+    corpus: Path = typer.Option(..., help="Directory of .txt/.md files, or a .jsonl export"),
+    out: Path = typer.Option(Path("golden.candidates.jsonl"), help="Where to write candidates"),
+    sample: int = typer.Option(50, help="How many documents to sample"),
+    stratify_by: list[str] = typer.Option(None, help="Metadata keys to stratify on"),
+    model: str = typer.Option(DEFAULT_MODEL, help="Generation model"),
+    seed: int = typer.Option(0, help="Sampling seed"),
+    max_cases: int = typer.Option(None, help="Stop after this many candidates"),
+) -> None:
+    """Generate candidate questions from a corpus."""
+    keys = tuple(stratify_by) if stratify_by else ("source",)
+    try:
+        documents, report = sample_with_report(load_corpus(corpus), n=sample, keys=keys, seed=seed)
+    except CorpusError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(code=1) from exc
+
+    console.print(
+        f"Corpus: {report.total} documents across {report.strata} strata; sampled {report.sampled}."
+    )
+
+    try:
+        generator = _build_generator(model)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(code=1) from exc
+
+    passages = [p for document in documents for p in candidate_passages(document)]
+    console.print(f"{len(passages)} candidate passages. Generating with {model}...")
+
+    cases = []
+    for case in generate_candidates(passages, generator):
+        cases.append(case)
+        if max_cases is not None and len(cases) >= max_cases:
+            break
+
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    save_golden(out, cases)
+    console.print(
+        f"Wrote {len(cases)} candidates to {out}. "
+        f"Review them with: rag-ci golden review --candidates {out}"
+    )
+
+
+@golden_app.command("review")
+def golden_review(
+    candidates: Path = typer.Option(Path("golden.candidates.jsonl"), help="Candidate file"),
+    golden: Path = typer.Option(Path("golden.jsonl"), help="Golden set to build"),
+) -> None:
+    """Accept, edit, or reject candidates - least confident first."""
+    session = ReviewSession(candidates=candidates, golden=golden)
+    if not session.pending():
+        console.print("Nothing left to review.")
+        return
+
+    def prompt(case):
+        answer = typer.prompt("[a]ccept / [e]dit / [r]eject / [s]kip / [q]uit", default="a")
+        letter = answer.strip().lower()[:1]
+        if letter == "e":
+            return "accept", typer.prompt("Question", default=case.question)
+        return {"a": "accept", "r": "reject", "s": "skip", "q": "quit"}.get(letter, "skip"), None
+
+    stats = run_review(session, prompt=prompt, console=console)
+    console.print(
+        f"Reviewed {stats.reviewed}: {stats.accepted} accepted, {stats.rejected} rejected. "
+        f"Golden set at {golden}."
+    )
