@@ -8,6 +8,25 @@ While the version stays below 1.0, the adapter contract may change in a minor re
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-08-09
+
+### Fixed
+
+- **Async adapters work.** `retrieve()`, `answer()`, and `build_index()` may be
+  `async def`; rag-ci awaits them. Previously a coroutine function was handed to
+  `asyncio.to_thread`, which returned the coroutine unawaited and failed several frames
+  later inside Pydantic — with no indication that the adapter was async. Most modern RAG
+  stacks are async, so this was the single largest barrier to adopting rag-ci.
+
+### Known limitations
+
+- **Character offsets are required** for exact passage matching. Pipelines that discard
+  them at chunking time fall back to token overlap, which is flagged but measures less
+  precisely — adopting rag-ci can mean reindexing.
+- **`build_index` assumes programmatic reindexing.** Ingestion driven by a separate script
+  or orchestrator puts index-time sweeps out of reach.
+
+
 ## [0.4.1] — 2026-08-09
 
 ### Fixed
@@ -138,7 +157,8 @@ First release. Measures retrieval quality and gates pull requests on it.
 - Generation metrics (faithfulness, citation accuracy) are not implemented yet — only
   retrieval is measured.
 
-[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.3.0
