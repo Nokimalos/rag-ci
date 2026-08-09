@@ -8,7 +8,7 @@ Regression testing and configuration sweeps for RAG pipelines.
 
 > **Status: early.** `rag-ci init` and `rag-ci run` work today — write an adapter, bring a
 > golden set, get tier-1 metrics with confidence intervals. `gate`, `sweep`, and golden-set
-> generation are next; see [the design spec](docs/superpowers/specs/2026-08-09-rag-ci-design.md).
+> generation are next; see [the design document](docs/design.md).
 
 ## The problem
 

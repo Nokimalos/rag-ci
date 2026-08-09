@@ -1,7 +1,12 @@
 # rag-ci — Design
 
-**Date:** 2026-08-09
-**Status:** Approved, pending implementation plan
+Why rag-ci is built the way it is. Read this before proposing an architectural change —
+most of what looks arbitrary here is load-bearing, and the reasoning is written down so it
+can be argued with rather than rediscovered.
+
+This document tracks intent, not progress. See the README for what actually ships today.
+
+*Last revised 2026-08-09.*
 
 ---
 
