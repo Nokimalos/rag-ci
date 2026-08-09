@@ -73,6 +73,13 @@ class SweepOutcome(BaseModel):
     evaluations_run: int
     n_configs: int
     full_grid_cost: int
+    # True when a rung eliminated configurations that were tied with the survivors.
+    # The cut was then alphabetical, not evidence-based, and the winner is a draw.
+    arbitrary_elimination: bool = False
+
+    @property
+    def decisive(self) -> bool:
+        return not self.arbitrary_elimination
 
 
 def plan_rungs(n_configs: int, n_cases: int, *, eta: int = 3, min_cases: int = 10) -> list[Rung]:
@@ -102,6 +109,17 @@ def plan_rungs(n_configs: int, n_cases: int, *, eta: int = 3, min_cases: int = 1
     return rungs
 
 
+def _cut_is_arbitrary(ranked: list[tuple[float, Config]], keep: int) -> bool:
+    """Did the last survivor tie with the first casualty?
+
+    When it did, the cut fell inside a group of equal scores and was settled by the
+    tie-break, not by evidence. Reporting a winner from that is reporting a coin toss.
+    """
+    if keep >= len(ranked):
+        return False
+    return ranked[keep - 1][0] == ranked[keep][0]
+
+
 def _rank(scored: list[tuple[float, Config]]) -> list[tuple[float, Config]]:
     # Ties break on the configuration's own ordering so a rerun picks the same winner.
     return sorted(scored, key=lambda pair: (-pair[0], repr(sorted(pair[1].items()))))
@@ -122,6 +140,7 @@ def successive_halving(
     rungs = plan_rungs(len(configs), n_cases, eta=eta, min_cases=min_cases)
     survivors = list(configs)
     evaluations: list[SweepEvaluation] = []
+    arbitrary = False
 
     for rung in rungs:
         scored = []
@@ -133,6 +152,7 @@ def successive_halving(
             scored.append((score, config))
         ranked = _rank(scored)
         keep = max(1, len(ranked) // eta) if rung.index < len(rungs) - 1 else 1
+        arbitrary = arbitrary or _cut_is_arbitrary(ranked, keep)
         survivors = [config for _, config in ranked[:keep]]
 
     return SweepOutcome(
@@ -142,6 +162,7 @@ def successive_halving(
         evaluations_run=len(evaluations),
         n_configs=len(configs),
         full_grid_cost=len(configs) * n_cases,
+        arbitrary_elimination=arbitrary,
     )
 
 
@@ -158,6 +179,7 @@ async def _run_halving(
     rungs = plan_rungs(len(configs), n_cases, eta=eta, min_cases=min_cases)
     survivors = list(configs)
     evaluations: list[SweepEvaluation] = []
+    arbitrary = False
 
     for rung in rungs:
         survivors = order_by_index_cost(survivors, index_keys)
@@ -170,6 +192,7 @@ async def _run_halving(
             scored.append((score, config))
         ranked = _rank(scored)
         keep = max(1, len(ranked) // eta) if rung.index < len(rungs) - 1 else 1
+        arbitrary = arbitrary or _cut_is_arbitrary(ranked, keep)
         survivors = [config for _, config in ranked[:keep]]
 
     return SweepOutcome(
@@ -179,6 +202,7 @@ async def _run_halving(
         evaluations_run=len(evaluations),
         n_configs=len(configs),
         full_grid_cost=len(configs) * n_cases,
+        arbitrary_elimination=arbitrary,
     )
 
 
