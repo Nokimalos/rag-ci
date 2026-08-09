@@ -27,17 +27,18 @@ jobs:
       should_release: ${{ steps.check.outputs.should_release }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-tags: true
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v9.0.0
-        with:
-          python-version: "3.12"
 
+      # No setup-uv here: this job only reads a string out of a TOML file. Installing a
+      # toolchain for that also installs its post-job cache step, which fails when the
+      # job never populated a cache — which is exactly what broke the 0.4.0 release.
       - name: Decide whether this version needs releasing
         id: check
         run: |
-          version=$(uv version --short)
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          if [ -z "$version" ]; then
+            echo "Could not read the version from pyproject.toml." >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
           # Ask the index, not git. A tag only proves someone tagged; PyPI is the
