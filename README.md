@@ -1,5 +1,9 @@
 # rag-ci
 
+[![CI](https://github.com/Nokimalos/rag-ci/actions/workflows/ci.yml/badge.svg)](https://github.com/Nokimalos/rag-ci/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
+
 Regression testing and configuration sweeps for RAG pipelines.
 
 > **Status: early.** `rag-ci init` and `rag-ci run` work today — write an adapter, bring a
