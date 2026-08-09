@@ -9,6 +9,9 @@ on:
   push:
     branches: [main]
     paths: ["pyproject.toml"]
+    # Kept alongside the bump trigger so a hand-pushed tag still releases. Dropping it
+    # created a window where neither mechanism fired and a version shipped nowhere.
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -37,10 +40,14 @@ jobs:
           version=$(uv version --short)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-          # Idempotent by construction: the question is not "did the version change"
-          # but "does this version already have a tag". Re-running is harmless.
-          if git rev-parse "v$version" >/dev/null 2>&1; then
-            echo "v$version is already tagged; nothing to release." >> "$GITHUB_STEP_SUMMARY"
+          # Ask the index, not git. A tag only proves someone tagged; PyPI is the
+          # irreversible step and the only thing that must never happen twice. Using the
+          # tag as the signal shipped a tagged-but-unpublished version once already.
+          # The simple index is used deliberately: the JSON API is CDN-cached and lagged
+          # by minutes during the 0.2.0 release.
+          if curl -sf "https://pypi.org/simple/rag-ci/" \
+               | grep -q "rag_ci-$version\.tar\.gz"; then
+            echo "$version is already on PyPI; nothing to release." >> "$GITHUB_STEP_SUMMARY"
             echo "should_release=false" >> "$GITHUB_OUTPUT"
           elif [ "${{ inputs.dry_run }}" = "true" ]; then
             echo "Dry run: would release v$version." >> "$GITHUB_STEP_SUMMARY"
@@ -103,7 +110,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.detect.outputs.version }}
         run: |
-          gh release create "v$VERSION" dist/* \
-            --target "$GITHUB_SHA" \
-            --title "v$VERSION" \
-            --generate-notes
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" dist/* --clobber
+          else
+            gh release create "v$VERSION" dist/* \
+              --target "$GITHUB_SHA" \
+              --title "v$VERSION" \
+              --generate-notes
+          fi
