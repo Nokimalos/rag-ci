@@ -1,0 +1,574 @@
+{
+  "case_results": [
+    {
+      "case_id": "q1",
+      "error": null,
+      "scores": {
+        "mrr": 1.0,
+        "recall@3": 1.0
+      },
+      "status": "ok",
+      "trace": {
+        "cost_usd": null,
+        "latency_ms": 1.0,
+        "steps": [
+          {
+            "chunks": [
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "solar",
+                "score": 0.4444444444444444,
+                "text": "The Sun contains 99.8 percent of the mass of the solar system. Jupiter"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "solar",
+                "score": 0.4444444444444444,
+                "text": " holds most of what remains. Mercury is the smallest planet and the cl"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "cities",
+                "score": 0.2222222222222222,
+                "text": "Tokyo is the most populous metropolitan area on Earth. Delhi and Shang"
+              },
+              {
+                "char_end": 157,
+                "char_start": 140,
+                "doc_id": "solar",
+                "score": 0.1111111111111111,
+                "text": "osest to the Sun."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "ocean",
+                "score": 0.1111111111111111,
+                "text": "The Mariana Trench reaches nearly 11000 metres below sea level. Pressu"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "ocean",
+                "score": 0.1111111111111111,
+                "text": "re there exceeds one thousand atmospheres. Only a handful of crewed de"
+              },
+              {
+                "char_end": 139,
+                "char_start": 70,
+                "doc_id": "cities",
+                "score": 0.1111111111111111,
+                "text": "hai follow closely behind. Urban growth has slowed in most of Europe."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "music",
+                "score": 0.1111111111111111,
+                "text": "The piano was invented by Bartolomeo Cristofori around 1700. It replac"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "music",
+                "score": 0.1111111111111111,
+                "text": "ed the harpsichord because it could vary loudness. The name comes from"
+              },
+              {
+                "char_end": 167,
+                "char_start": 140,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "scents have ever been made."
+              }
+            ],
+            "query": "What fraction of the solar system mass is the Sun?"
+          }
+        ],
+        "tokens": null
+      }
+    },
+    {
+      "case_id": "q2",
+      "error": null,
+      "scores": {
+        "mrr": 0.5,
+        "recall@3": 1.0
+      },
+      "status": "ok",
+      "trace": {
+        "cost_usd": null,
+        "latency_ms": 1.0,
+        "steps": [
+          {
+            "chunks": [
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "solar",
+                "score": 0.3333333333333333,
+                "text": " holds most of what remains. Mercury is the smallest planet and the cl"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "ocean",
+                "score": 0.3333333333333333,
+                "text": "The Mariana Trench reaches nearly 11000 metres below sea level. Pressu"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "cities",
+                "score": 0.3333333333333333,
+                "text": "Tokyo is the most populous metropolitan area on Earth. Delhi and Shang"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "solar",
+                "score": 0.16666666666666666,
+                "text": "The Sun contains 99.8 percent of the mass of the solar system. Jupiter"
+              },
+              {
+                "char_end": 157,
+                "char_start": 140,
+                "doc_id": "solar",
+                "score": 0.16666666666666666,
+                "text": "osest to the Sun."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "music",
+                "score": 0.16666666666666666,
+                "text": "The piano was invented by Bartolomeo Cristofori around 1700. It replac"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "music",
+                "score": 0.16666666666666666,
+                "text": "ed the harpsichord because it could vary loudness. The name comes from"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "re there exceeds one thousand atmospheres. Only a handful of crewed de"
+              },
+              {
+                "char_end": 167,
+                "char_start": 140,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "scents have ever been made."
+              },
+              {
+                "char_end": 139,
+                "char_start": 70,
+                "doc_id": "cities",
+                "score": 0.0,
+                "text": "hai follow closely behind. Urban growth has slowed in most of Europe."
+              }
+            ],
+            "query": "How deep is the Mariana Trench?"
+          }
+        ],
+        "tokens": null
+      }
+    },
+    {
+      "case_id": "q3",
+      "error": null,
+      "scores": {
+        "mrr": 1.0,
+        "recall@3": 1.0
+      },
+      "status": "ok",
+      "trace": {
+        "cost_usd": null,
+        "latency_ms": 1.0,
+        "steps": [
+          {
+            "chunks": [
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "cities",
+                "score": 0.7142857142857143,
+                "text": "Tokyo is the most populous metropolitan area on Earth. Delhi and Shang"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "solar",
+                "score": 0.42857142857142855,
+                "text": " holds most of what remains. Mercury is the smallest planet and the cl"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "solar",
+                "score": 0.14285714285714285,
+                "text": "The Sun contains 99.8 percent of the mass of the solar system. Jupiter"
+              },
+              {
+                "char_end": 157,
+                "char_start": 140,
+                "doc_id": "solar",
+                "score": 0.14285714285714285,
+                "text": "osest to the Sun."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "ocean",
+                "score": 0.14285714285714285,
+                "text": "The Mariana Trench reaches nearly 11000 metres below sea level. Pressu"
+              },
+              {
+                "char_end": 139,
+                "char_start": 70,
+                "doc_id": "cities",
+                "score": 0.14285714285714285,
+                "text": "hai follow closely behind. Urban growth has slowed in most of Europe."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "music",
+                "score": 0.14285714285714285,
+                "text": "The piano was invented by Bartolomeo Cristofori around 1700. It replac"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "music",
+                "score": 0.14285714285714285,
+                "text": "ed the harpsichord because it could vary loudness. The name comes from"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "re there exceeds one thousand atmospheres. Only a handful of crewed de"
+              },
+              {
+                "char_end": 167,
+                "char_start": 140,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "scents have ever been made."
+              }
+            ],
+            "query": "Which metropolitan area is the most populous?"
+          }
+        ],
+        "tokens": null
+      }
+    },
+    {
+      "case_id": "q4",
+      "error": null,
+      "scores": {
+        "mrr": 1.0,
+        "recall@3": 1.0
+      },
+      "status": "ok",
+      "trace": {
+        "cost_usd": null,
+        "latency_ms": 1.0,
+        "steps": [
+          {
+            "chunks": [
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "music",
+                "score": 0.5,
+                "text": "The piano was invented by Bartolomeo Cristofori around 1700. It replac"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "solar",
+                "score": 0.25,
+                "text": "The Sun contains 99.8 percent of the mass of the solar system. Jupiter"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "solar",
+                "score": 0.25,
+                "text": " holds most of what remains. Mercury is the smallest planet and the cl"
+              },
+              {
+                "char_end": 157,
+                "char_start": 140,
+                "doc_id": "solar",
+                "score": 0.25,
+                "text": "osest to the Sun."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "ocean",
+                "score": 0.25,
+                "text": "The Mariana Trench reaches nearly 11000 metres below sea level. Pressu"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "cities",
+                "score": 0.25,
+                "text": "Tokyo is the most populous metropolitan area on Earth. Delhi and Shang"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "music",
+                "score": 0.25,
+                "text": "ed the harpsichord because it could vary loudness. The name comes from"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "re there exceeds one thousand atmospheres. Only a handful of crewed de"
+              },
+              {
+                "char_end": 167,
+                "char_start": 140,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "scents have ever been made."
+              },
+              {
+                "char_end": 139,
+                "char_start": 70,
+                "doc_id": "cities",
+                "score": 0.0,
+                "text": "hai follow closely behind. Urban growth has slowed in most of Europe."
+              }
+            ],
+            "query": "Who invented the piano?"
+          }
+        ],
+        "tokens": null
+      }
+    },
+    {
+      "case_id": "q5",
+      "error": null,
+      "scores": {
+        "mrr": 0.14285714285714285,
+        "recall@3": 0.0
+      },
+      "status": "ok",
+      "trace": {
+        "cost_usd": null,
+        "latency_ms": 1.0,
+        "steps": [
+          {
+            "chunks": [
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "solar",
+                "score": 0.4,
+                "text": " holds most of what remains. Mercury is the smallest planet and the cl"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "music",
+                "score": 0.4,
+                "text": "The piano was invented by Bartolomeo Cristofori around 1700. It replac"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "solar",
+                "score": 0.2,
+                "text": "The Sun contains 99.8 percent of the mass of the solar system. Jupiter"
+              },
+              {
+                "char_end": 157,
+                "char_start": 140,
+                "doc_id": "solar",
+                "score": 0.2,
+                "text": "osest to the Sun."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "ocean",
+                "score": 0.2,
+                "text": "The Mariana Trench reaches nearly 11000 metres below sea level. Pressu"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "cities",
+                "score": 0.2,
+                "text": "Tokyo is the most populous metropolitan area on Earth. Delhi and Shang"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "music",
+                "score": 0.2,
+                "text": "ed the harpsichord because it could vary loudness. The name comes from"
+              },
+              {
+                "char_end": 172,
+                "char_start": 140,
+                "doc_id": "music",
+                "score": 0.2,
+                "text": " gravicembalo col piano e forte."
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "re there exceeds one thousand atmospheres. Only a handful of crewed de"
+              },
+              {
+                "char_end": 167,
+                "char_start": 140,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "scents have ever been made."
+              }
+            ],
+            "query": "What did the piano replace?"
+          }
+        ],
+        "tokens": null
+      }
+    },
+    {
+      "case_id": "q6",
+      "error": null,
+      "scores": {
+        "mrr": 1.0,
+        "recall@3": 1.0
+      },
+      "status": "ok",
+      "trace": {
+        "cost_usd": null,
+        "latency_ms": 1.0,
+        "steps": [
+          {
+            "chunks": [
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "solar",
+                "score": 0.42857142857142855,
+                "text": " holds most of what remains. Mercury is the smallest planet and the cl"
+              },
+              {
+                "char_end": 157,
+                "char_start": 140,
+                "doc_id": "solar",
+                "score": 0.2857142857142857,
+                "text": "osest to the Sun."
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "cities",
+                "score": 0.2857142857142857,
+                "text": "Tokyo is the most populous metropolitan area on Earth. Delhi and Shang"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "solar",
+                "score": 0.14285714285714285,
+                "text": "The Sun contains 99.8 percent of the mass of the solar system. Jupiter"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "ocean",
+                "score": 0.14285714285714285,
+                "text": "The Mariana Trench reaches nearly 11000 metres below sea level. Pressu"
+              },
+              {
+                "char_end": 70,
+                "char_start": 0,
+                "doc_id": "music",
+                "score": 0.14285714285714285,
+                "text": "The piano was invented by Bartolomeo Cristofori around 1700. It replac"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "music",
+                "score": 0.14285714285714285,
+                "text": "ed the harpsichord because it could vary loudness. The name comes from"
+              },
+              {
+                "char_end": 140,
+                "char_start": 70,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "re there exceeds one thousand atmospheres. Only a handful of crewed de"
+              },
+              {
+                "char_end": 167,
+                "char_start": 140,
+                "doc_id": "ocean",
+                "score": 0.0,
+                "text": "scents have ever been made."
+              },
+              {
+                "char_end": 139,
+                "char_start": 70,
+                "doc_id": "cities",
+                "score": 0.0,
+                "text": "hai follow closely behind. Urban growth has slowed in most of Europe."
+              }
+            ],
+            "query": "Which planet is closest to the Sun?"
+          }
+        ],
+        "tokens": null
+      }
+    }
+  ],
+  "config": {
+    "top_k": 10
+  },
+  "cost_usd_per_query": null,
+  "degraded_matching": false,
+  "error_rate": 0.0,
+  "golden_hash": "e6c942e302cecdadd9ef209330dee5695eadc7b8537510105462cbcad17854e0",
+  "metrics": {
+    "mrr": {
+      "ci_high": 1.0,
+      "ci_low": 0.4880952380952381,
+      "mean": 0.7738095238095237,
+      "n": 6
+    },
+    "recall@3": {
+      "ci_high": 1.0,
+      "ci_low": 0.5,
+      "mean": 0.8333333333333334,
+      "n": 6
+    }
+  },
+  "primary_metric": "recall@3",
+  "tokens_per_query": null,
+  "valid": true
+}

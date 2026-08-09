@@ -1,0 +1,31 @@
+name: self-check
+
+# rag-ci gating its own reference adapter: the tool is exercised on every pull request
+# here rather than only in users' repositories.
+on:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --dev
+      - name: Measure and gate the reference adapter
+        run: |
+          uv run rag-ci run \
+            --adapter examples/reference/ragci_adapter.py \
+            --golden examples/reference/golden.jsonl \
+            --metric recall@3 --metric mrr \
+            --out .ragci/run.json
+          uv run rag-ci gate \
+            --run .ragci/run.json \
+            --baseline examples/reference/baseline.json \
+            --markdown .ragci/report.md
+      - name: Show the report
+        if: always()
+        run: cat .ragci/report.md >> "$GITHUB_STEP_SUMMARY"
