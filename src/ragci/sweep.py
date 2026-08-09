@@ -71,6 +71,7 @@ class SweepOutcome(BaseModel):
     evaluations: list[SweepEvaluation]
     rungs: list[Rung]
     evaluations_run: int
+    n_configs: int
     full_grid_cost: int
 
 
@@ -139,6 +140,7 @@ def successive_halving(
         evaluations=evaluations,
         rungs=rungs,
         evaluations_run=len(evaluations),
+        n_configs=len(configs),
         full_grid_cost=len(configs) * n_cases,
     )
 
@@ -175,6 +177,7 @@ async def _run_halving(
         evaluations=evaluations,
         rungs=rungs,
         evaluations_run=len(evaluations),
+        n_configs=len(configs),
         full_grid_cost=len(configs) * n_cases,
     )
 

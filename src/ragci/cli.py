@@ -17,9 +17,16 @@ from ragci.corpus import CorpusError, load_corpus, sample_with_report
 from ragci.generate import DEFAULT_MODEL, AnthropicGenerator, generate_candidates
 from ragci.golden import golden_hash, load_golden, save_golden
 from ragci.passages import candidate_passages
-from ragci.report import load_json, render_console, render_markdown, save_json
+from ragci.report import (
+    load_json,
+    render_console,
+    render_markdown,
+    render_sweep,
+    save_json,
+)
 from ragci.review import ReviewSession, run_review
 from ragci.runner import run_cases
+from ragci.sweep import sweep_adapter
 
 app = typer.Typer(add_completion=False, help="Regression testing for RAG pipelines.")
 console = Console()
@@ -231,3 +238,42 @@ def golden_review(
         f"Reviewed {stats.reviewed}: {stats.accepted} accepted, {stats.rejected} rejected. "
         f"Golden set at {golden}."
     )
+
+
+@app.command()
+def sweep(
+    adapter: Path = typer.Option(Path("ragci_adapter.py"), help="Path to your adapter"),
+    golden: Path = typer.Option(Path("golden.jsonl"), help="Path to the golden set"),
+    metric: str = typer.Option(None, help="Metric to optimise; defaults to the primary"),
+    eta: int = typer.Option(3, help="Elimination factor between rungs"),
+    min_cases: int = typer.Option(10, help="Smallest rung, in cases"),
+    only: list[str] = typer.Option(None, help="Restrict the sweep to these parameters"),
+    out: Path = typer.Option(Path(".ragci/sweep.json"), help="Where to write the outcome"),
+    seed: int = typer.Option(0, help="Seed, for a reproducible winner"),
+) -> None:
+    """Find the configuration that actually wins, without evaluating the whole grid."""
+    instance = load_adapter(adapter)
+    spec = instance.__ragci_spec__
+    cases = list(load_golden(golden))
+
+    try:
+        outcome = asyncio.run(
+            sweep_adapter(
+                instance,
+                cases,
+                spec=spec,
+                metric=metric or spec.primary_metric,
+                eta=eta,
+                min_cases=min_cases,
+                only=list(only) if only else None,
+                seed=seed,
+            )
+        )
+    except ValueError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(code=1) from exc
+
+    render_sweep(outcome, console=console)
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    Path(out).write_text(outcome.model_dump_json(indent=2), encoding="utf-8")
+    console.print(f"Sweep outcome written to {escape(str(out))}")

@@ -8,6 +8,7 @@ from rich.table import Table
 
 from ragci.baseline import GateDecision
 from ragci.runner import RunRecord
+from ragci.sweep import SweepOutcome
 
 
 def render_console(record: RunRecord, console: Console | None = None) -> None:
@@ -106,3 +107,30 @@ def render_markdown(record: RunRecord, decision: GateDecision | None = None) -> 
         ]
 
     return "\n".join(lines)
+
+
+def render_sweep(outcome: "SweepOutcome", console: Console | None = None) -> None:
+    """Ranked configurations, with the cost of the search stated rather than implied."""
+    console = console or Console()
+
+    # Last evaluation per configuration: the deepest rung it survived to.
+    best = {repr(e.config): e for e in outcome.evaluations}
+
+    table = Table(title=f"rag-ci sweep  ({len(outcome.rungs)} rungs)")
+    table.add_column("configuration")
+    table.add_column("score", justify="right")
+    table.add_column("cases", justify="right")
+
+    ranked = sorted(best.values(), key=lambda e: (-e.rung, -e.score))
+    for evaluation in ranked:
+        marker = " ← winner" if evaluation.config == outcome.winner else ""
+        params = ", ".join(f"{k}={v}" for k, v in sorted(evaluation.config.items())) or "default"
+        table.add_row(f"{params}{marker}", f"{evaluation.score:.3f}", str(evaluation.n_cases))
+    console.print(table)
+
+    spent = sum(e.n_cases for e in outcome.evaluations)
+    saved = 100 * (1 - spent / outcome.full_grid_cost) if outcome.full_grid_cost else 0
+    console.print(
+        f"Searched {outcome.n_configs} configurations in {len(outcome.rungs)} rung(s): "
+        f"{spent} case-evaluations instead of {outcome.full_grid_cost} ({saved:.0f}% saved)."
+    )

@@ -250,3 +250,10 @@ async def test_the_sweep_is_reproducible():
 async def test_sweeping_with_no_cases_is_rejected():
     with pytest.raises(ValueError, match="no cases"):
         await sweep_adapter(ReferenceRag(), [], spec=ReferenceRag.__ragci_spec__, metric="recall@3")
+
+
+def test_the_outcome_records_the_grid_size_directly():
+    # Deriving it from full_grid_cost / n_cases breaks the moment a rung uses a
+    # different case count than the divisor assumes.
+    outcome = successive_halving([{"k": i} for i in range(9)], lambda config, n: 0.5, n_cases=90)
+    assert outcome.n_configs == 9

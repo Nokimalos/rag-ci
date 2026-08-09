@@ -8,6 +8,31 @@ While the version stays below 1.0, the adapter contract may change in a minor re
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-09
+
+Configuration sweeps. The design document is now fully delivered.
+
+### Added
+
+- **`rag-ci sweep`** — searches the parameter grid the adapter declares using successive
+  halving: every configuration runs against a small case sample, the worst are dropped,
+  survivors advance to a larger sample. The report states how many case-evaluations were
+  spent against the exhaustive cost, so the saving is visible rather than implied.
+- **Index-aware ordering** — each rung is ordered so every query-time variant of one index
+  is evaluated before the index is rebuilt. One build per index instead of one per
+  configuration, which is the difference between a sweep that finishes on a large corpus
+  and one that does not.
+- **`ragci.poolcurve`** — fits a metric against `log10(pool size)` and projects a
+  sub-corpus measurement to full corpus size, with a bootstrapped uncertainty band. A poor
+  fit reports `reliable: false` instead of a confident number, and two points are never
+  judged reliable.
+- **`holm_bonferroni`** in `ragci.stats` — controls the family-wise error rate when
+  comparing a winner against every runner-up.
+- **`docs/sweeps.md`**, including the honest caveats: a configuration that only shines on
+  hard cases can be eliminated early, and below roughly `eta × min-cases` the sweep
+  degenerates into an exhaustive grid search.
+
+
 ## [0.2.0] — 2026-08-09
 
 Golden sets no longer have to be written by hand.
@@ -71,6 +96,7 @@ First release. Measures retrieval quality and gates pull requests on it.
 - Generation metrics (faithfulness, citation accuracy) are not implemented yet — only
   retrieval is measured.
 
-[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Nokimalos/rag-ci/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Nokimalos/rag-ci/releases/tag/v0.1.0

@@ -19,12 +19,15 @@ def _out(result) -> str:
 
 
 ADAPTER_SOURCE = """
-from ragci.contract import Chunk, RetrievalTrace, Step, adapter
+from ragci.contract import Chunk, ParamSpec, RetrievalTrace, Step, adapter
 
 DOC = "Gravity is the attraction between masses and Einstein recast it as curvature."
 
 
-@adapter(primary_metric="recall@3")
+@adapter(
+    query_time_params=[ParamSpec(name="top_k", values=[1, 3])],
+    primary_metric="recall@3",
+)
 class TinyRag:
     def retrieve(self, query, index, config):
         return RetrievalTrace(
@@ -326,3 +329,79 @@ def test_golden_review_with_nothing_pending_says_so(tmp_path):
     )
     assert result.exit_code == 0
     assert "nothing" in _out(result).lower()
+
+
+def test_sweep_reports_a_winner_and_the_saving(tmp_path):
+    adapter_path, golden_path = _write_workspace(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "sweep",
+            "--adapter",
+            str(adapter_path),
+            "--golden",
+            str(golden_path),
+            "--metric",
+            "recall@3",
+            "--out",
+            str(tmp_path / "sweep.json"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "winner" in _out(result).lower()
+    assert (tmp_path / "sweep.json").exists()
+
+
+def test_sweep_states_how_much_of_the_grid_it_skipped(tmp_path):
+    adapter_path, golden_path = _write_workspace(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "sweep",
+            "--adapter",
+            str(adapter_path),
+            "--golden",
+            str(golden_path),
+            "--metric",
+            "recall@3",
+        ],
+    )
+    # Silent truncation reads as full coverage; the cost must be on screen.
+    assert "case-evaluations" in _out(result)
+
+
+def test_sweep_can_be_restricted_to_named_parameters(tmp_path):
+    adapter_path, golden_path = _write_workspace(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "sweep",
+            "--adapter",
+            str(adapter_path),
+            "--golden",
+            str(golden_path),
+            "--metric",
+            "recall@3",
+            "--only",
+            "top_k",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_sweep_rejects_an_undeclared_parameter(tmp_path):
+    adapter_path, golden_path = _write_workspace(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "sweep",
+            "--adapter",
+            str(adapter_path),
+            "--golden",
+            str(golden_path),
+            "--only",
+            "nonexistent",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "not declared" in _out(result)
