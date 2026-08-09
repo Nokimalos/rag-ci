@@ -79,3 +79,66 @@ def test_a_supporting_chunk_out_of_range_is_rejected():
     verdict = Verdict(claims=[Claim(text="a", supported=True, supporting_chunk=7)])
     with pytest.raises(ValueError, match="out of range"):
         citation_accuracy(answer, verdict, [_chunk()])
+
+
+class _FakeMessages:
+    def __init__(self, result):
+        self.result = result
+        self.calls: list[dict] = []
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+
+        class Response:
+            parsed_output = self.result
+
+        return Response()
+
+
+class _FakeClient:
+    def __init__(self, result):
+        self.messages = _FakeMessages(result)
+
+
+def test_the_judge_calls_parse_with_the_expected_shape():
+    from ragci.judge import DEFAULT_MODEL, AnthropicJudge
+
+    expected = Verdict(claims=[Claim(text="a", supported=True, supporting_chunk=0)])
+    client = _FakeClient(expected)
+    result = AnthropicJudge(client=client).assess(
+        "How deep?", Answer(text="11000 m"), [_chunk("ocean")]
+    )
+
+    assert result == expected
+    call = client.messages.calls[0]
+    assert call["model"] == DEFAULT_MODEL
+    assert call["output_format"] is Verdict
+    # Opus 5 rejects temperature and prefill; neither may appear.
+    assert "temperature" not in call and "top_p" not in call
+    assert all(m["role"] != "assistant" for m in call["messages"])
+
+
+def test_the_judge_sees_numbered_chunks_so_it_can_reference_them():
+    from ragci.judge import AnthropicJudge
+
+    client = _FakeClient(Verdict(claims=[]))
+    AnthropicJudge(client=client).assess("q", Answer(text="a"), [_chunk("d1"), _chunk("d2")])
+    content = client.messages.calls[0]["messages"][0]["content"]
+    assert "[0]" in content and "[1]" in content
+
+
+def test_the_judge_model_is_configurable():
+    from ragci.judge import AnthropicJudge
+
+    client = _FakeClient(Verdict(claims=[]))
+    AnthropicJudge(model="claude-sonnet-5", client=client).assess("q", Answer(text="a"), [])
+    assert client.messages.calls[0]["model"] == "claude-sonnet-5"
+
+
+def test_using_the_judge_without_the_extra_is_actionable():
+    import ragci.judge as judge_module
+
+    if judge_module._anthropic_available():
+        return
+    with pytest.raises(RuntimeError, match=r"rag-ci\[generate\]"):
+        judge_module.AnthropicJudge()

@@ -70,3 +70,62 @@ def citation_accuracy(answer: Answer, verdict: Verdict, chunks: list[Chunk]) -> 
     supporting = {chunks[index].identity() for index in used}
     useful = sum(chunk.identity() in supporting for chunk in answer.cited_chunks)
     return useful / len(answer.cited_chunks)
+
+
+SYSTEM_PROMPT = """\
+You check whether an answer is grounded in the passages a retrieval system returned.
+
+Break the answer into its individual factual claims. For each claim, decide whether the \
+numbered passages support it, and if so which one. A claim is supported only when a \
+passage states it or directly entails it — not when a passage is merely on the same topic, \
+and not when the claim is true in general but absent from these passages.
+
+Ignore hedging, restatements of the question, and offers to help further: those are not \
+claims. Judge only what the answer asserts as fact. An answer that asserts nothing has no \
+claims at all, which is a valid verdict."""
+
+
+def _anthropic_available() -> bool:
+    from ragci.generate import _anthropic_available as available
+
+    return available()
+
+
+def _render(chunks: list[Chunk]) -> str:
+    # Numbered so the model can point at a passage by index rather than quoting it back.
+    return "\n\n".join(f"[{i}] {chunk.text}" for i, chunk in enumerate(chunks))
+
+
+class AnthropicJudge:
+    """Assesses grounding with a single temperature-0 call per case."""
+
+    def __init__(self, model: str = DEFAULT_MODEL, client=None):
+        if client is None and not _anthropic_available():
+            raise RuntimeError(
+                'Judging needs the anthropic SDK. Install it with: pip install "rag-ci[generate]"'
+            )
+        if client is None:
+            import anthropic
+
+            client = anthropic.Anthropic()
+        self._client = client
+        self._model = model
+
+    def assess(self, question: str, answer: Answer, chunks: list[Chunk]) -> Verdict | None:
+        response = self._client.messages.parse(
+            model=self._model,
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Question:\n{question}\n\n"
+                        f"Answer:\n{answer.text}\n\n"
+                        f"Retrieved passages:\n{_render(chunks)}"
+                    ),
+                }
+            ],
+            output_format=Verdict,
+        )
+        return response.parsed_output
