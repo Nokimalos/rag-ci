@@ -141,3 +141,87 @@ def successive_halving(
         evaluations_run=len(evaluations),
         full_grid_cost=len(configs) * n_cases,
     )
+
+
+async def _run_halving(
+    configs: Sequence[Config],
+    evaluate,
+    n_cases: int,
+    eta: int,
+    min_cases: int,
+    index_keys: Sequence[str],
+) -> SweepOutcome:
+    """successive_halving with an awaited evaluator, reordering survivors each rung
+    so configurations sharing an index stay adjacent."""
+    rungs = plan_rungs(len(configs), n_cases, eta=eta, min_cases=min_cases)
+    survivors = list(configs)
+    evaluations: list[SweepEvaluation] = []
+
+    for rung in rungs:
+        survivors = order_by_index_cost(survivors, index_keys)
+        scored = []
+        for config in survivors:
+            score = await evaluate(config, rung.n_cases)
+            evaluations.append(
+                SweepEvaluation(config=config, score=score, n_cases=rung.n_cases, rung=rung.index)
+            )
+            scored.append((score, config))
+        ranked = _rank(scored)
+        keep = max(1, len(ranked) // eta) if rung.index < len(rungs) - 1 else 1
+        survivors = [config for _, config in ranked[:keep]]
+
+    return SweepOutcome(
+        winner=survivors[0],
+        evaluations=evaluations,
+        rungs=rungs,
+        evaluations_run=len(evaluations),
+        full_grid_cost=len(configs) * n_cases,
+    )
+
+
+async def sweep_adapter(
+    adapter,
+    cases: Sequence[Any],
+    *,
+    spec: AdapterSpec,
+    metric: str,
+    n_cases: int | None = None,
+    eta: int = 3,
+    min_cases: int = 10,
+    only: Sequence[str] | None = None,
+    seed: int = 0,
+    corpus: Any = None,
+) -> SweepOutcome:
+    """Sweep a real adapter, rebuilding its index as rarely as the grid allows."""
+    from ragci.runner import run_cases  # local: keeps sweep importable on its own
+
+    cases = list(cases)
+    if not cases:
+        raise ValueError("cannot sweep: no cases in the golden set")
+
+    grid = expand_grid(spec, only=only)
+    index_keys = [p.name for p in spec.index_time_params if only is None or p.name in only]
+    total_cases = n_cases or len(cases)
+    built: dict[tuple, Any] = {}
+
+    async def evaluate(config: Config, rung_cases: int) -> float:
+        index = None
+        if hasattr(adapter, "build_index"):
+            signature = index_signature(config, index_keys)
+            if signature not in built:
+                built.clear()  # one live index at a time: they can be large
+                built[signature] = adapter.build_index(corpus, config)
+            index = built[signature]
+        record = await run_cases(
+            adapter,
+            cases[:rung_cases],
+            config=config,
+            metric_names=[metric],
+            golden_hash="sweep",
+            index=index,
+            seed=seed,
+        )
+        summary = record.metrics.get(metric)
+        return summary.mean if summary else 0.0
+
+    return await _run_halving(grid, evaluate, total_cases, eta, min_cases, index_keys)

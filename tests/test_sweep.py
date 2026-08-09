@@ -1,6 +1,7 @@
 import pytest
 
 from ragci.contract import AdapterSpec, ParamSpec
+from ragci.golden import GoldenCase, Passage
 from ragci.sweep import (
     count_rebuilds,
     expand_grid,
@@ -8,7 +9,9 @@ from ragci.sweep import (
     order_by_index_cost,
     plan_rungs,
     successive_halving,
+    sweep_adapter,
 )
+from tests.fixtures.reference_adapter import ReferenceRag
 
 
 def _spec(index=None, query=None) -> AdapterSpec:
@@ -156,3 +159,94 @@ def test_a_tie_resolves_deterministically():
 def test_an_empty_grid_is_rejected():
     with pytest.raises(ValueError, match="no configurations"):
         successive_halving([], lambda config, n: 0.0, n_cases=10)
+
+
+def _cases(n: int = 12) -> list[GoldenCase]:
+    return [
+        GoldenCase(
+            id=f"q{i}",
+            question="Gravity is the attraction between masses",
+            required_passages=[
+                Passage(
+                    doc_id="physics",
+                    char_start=0,
+                    char_end=41,
+                    text="Gravity is the attraction between masses.",
+                )
+            ],
+        )
+        for i in range(n)
+    ]
+
+
+async def test_a_sweep_returns_a_configuration_from_the_grid():
+    outcome = await sweep_adapter(
+        ReferenceRag(), _cases(), spec=ReferenceRag.__ragci_spec__, metric="recall@3"
+    )
+    assert set(outcome.winner) <= {"chunk_size", "top_k"}
+
+
+async def test_the_sweep_costs_less_than_the_full_grid():
+    outcome = await sweep_adapter(
+        ReferenceRag(), _cases(36), spec=ReferenceRag.__ragci_spec__, metric="recall@3"
+    )
+    actual = sum(e.n_cases for e in outcome.evaluations)
+    assert outcome.full_grid_cost == 6 * 36  # 2 chunk sizes x 3 top_k x 36 cases
+    assert actual < outcome.full_grid_cost
+
+
+async def test_too_few_cases_degenerates_to_a_full_grid_search():
+    # With 12 cases and a 10-case floor there is no room for a second rung, so every
+    # configuration is evaluated on everything. That is the correct outcome: you cannot
+    # eliminate a configuration on evidence you do not have.
+    outcome = await sweep_adapter(
+        ReferenceRag(), _cases(12), spec=ReferenceRag.__ragci_spec__, metric="recall@3"
+    )
+    assert len(outcome.rungs) == 1
+    assert sum(e.n_cases for e in outcome.evaluations) == outcome.full_grid_cost
+
+
+async def test_build_index_is_called_once_per_distinct_index_signature():
+    class Counting:
+        __ragci_spec__ = ReferenceRag.__ragci_spec__
+
+        def __init__(self):
+            self.builds: list[int] = []
+            self._inner = ReferenceRag()
+
+        def build_index(self, corpus, config):
+            self.builds.append(config.get("chunk_size"))
+            return object()
+
+        def retrieve(self, query, index, config):
+            return self._inner.retrieve(query, index, config)
+
+    adapter = Counting()
+    await sweep_adapter(
+        adapter, _cases(), spec=Counting.__ragci_spec__, metric="recall@3", min_cases=12
+    )
+    # Two chunk sizes, so at most two builds per rung - never one per configuration.
+    assert len(adapter.builds) <= 2 * 3
+
+
+async def test_an_adapter_without_build_index_sweeps_query_parameters_only():
+    outcome = await sweep_adapter(
+        ReferenceRag(),
+        _cases(),
+        spec=ReferenceRag.__ragci_spec__,
+        metric="recall@3",
+        only=["top_k"],
+    )
+    assert set(outcome.winner) == {"top_k"}
+
+
+async def test_the_sweep_is_reproducible():
+    kwargs = dict(spec=ReferenceRag.__ragci_spec__, metric="recall@3", seed=7)
+    first = await sweep_adapter(ReferenceRag(), _cases(), **kwargs)
+    second = await sweep_adapter(ReferenceRag(), _cases(), **kwargs)
+    assert first.winner == second.winner
+
+
+async def test_sweeping_with_no_cases_is_rejected():
+    with pytest.raises(ValueError, match="no cases"):
+        await sweep_adapter(ReferenceRag(), [], spec=ReferenceRag.__ragci_spec__, metric="recall@3")
