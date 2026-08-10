@@ -6,9 +6,11 @@ can be argued with rather than rediscovered.
 
 This document tracks intent, not progress. See the README for what actually ships today.
 
-**Designed but not implemented as of 0.5.0** — listed here so nothing below reads as a
-feature list: a content-addressed disk cache, two-stage evaluation on large corpora,
-retries, `--max-cost`, and gating on latency.
+**Designed but not implemented as of 0.6.0** — listed here so nothing below reads as a
+feature list: two-stage evaluation on large corpora, `--max-cost`, and gating on latency.
+The last of those is not simply unbuilt: timings are deliberately excluded from the run
+record so two identical runs produce identical bytes, and gating on latency would mean
+reopening that.
 
 *Last revised 2026-08-10.*
 
