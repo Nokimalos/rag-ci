@@ -1,6 +1,7 @@
 import pytest
 
 from ragci.contract import AdapterSpec, ParamSpec
+from ragci.corpus import Document
 from ragci.golden import GoldenCase, Passage
 from ragci.sweep import (
     count_rebuilds,
@@ -422,3 +423,131 @@ def test_a_configuration_that_errored_on_every_case_is_skipped_not_crashed():
     from ragci.sweep import compare_finalists
 
     assert compare_finalists([0.9, 0.8], [({"k": 1}, [None, None])]) == []
+
+
+# --- Extrapolating past the measured corpus -------------------------------------------
+
+
+def _docs(n: int, prefix: str = "d"):
+    return [Document(doc_id=f"{prefix}{i}", text=f"text {i}") for i in range(n)]
+
+
+def test_the_split_keeps_every_document_the_golden_set_needs():
+    from ragci.sweep import split_pool
+
+    required, distractors = split_pool(_docs(5), {"d1", "d3"})
+    assert [d.doc_id for d in required] == ["d1", "d3"]
+    assert [d.doc_id for d in distractors] == ["d0", "d2", "d4"]
+
+
+def test_every_planned_pool_holds_the_required_documents():
+    # Slicing the corpus instead would drop the documents the questions are about, and
+    # the curve would measure "the answer is gone", not "the answer is harder to find".
+    from ragci.sweep import pool_plan
+
+    assert min(pool_plan(4, 996)) >= 4
+
+
+def test_the_plan_ends_at_the_whole_corpus():
+    from ragci.sweep import pool_plan
+
+    assert pool_plan(4, 996)[-1] == 1000
+    assert pool_plan(10, 0) == [10]
+
+
+def test_the_plan_is_log_spaced_and_deduplicated():
+    from ragci.sweep import pool_plan
+
+    sizes = pool_plan(10, 9990, points=4)
+    assert sizes == sorted(set(sizes))
+    assert len(sizes) == 4
+    # Log spacing: each step multiplies rather than adds.
+    ratios = [b / a for a, b in zip(sizes, sizes[1:], strict=False)]
+    assert max(ratios) / min(ratios) < 1.5
+
+
+def test_a_plan_needs_at_least_two_points():
+    from ragci.sweep import pool_plan
+
+    with pytest.raises(ValueError, match="at least two points"):
+        pool_plan(4, 996, points=1)
+
+
+async def test_extrapolation_measures_growing_pools_and_projects():
+    from ragci.sweep import measure_pool_curve
+
+    seen: list[int] = []
+
+    class Counting(ReferenceRag):
+        async def build_index(self, corpus, config):
+            seen.append(len(corpus))
+            return None
+
+    curve = await measure_pool_curve(
+        Counting(),
+        _cases(4),
+        config={"chunk_size": 70, "top_k": 3},
+        metric="recall@3",
+        documents=[*_docs(20), Document(doc_id="physics", text="Gravity.")],
+        target_pool_size=1_000_000,
+        points=3,
+    )
+    assert seen == sorted(seen) and len(seen) == 3  # pools grow, one build each
+    assert seen[-1] == 21  # the last pool is the whole corpus
+    assert curve.target_pool_size == 1_000_000
+
+
+async def test_extrapolation_refuses_a_corpus_the_questions_are_not_about():
+    from ragci.sweep import measure_pool_curve
+
+    class Indexing(ReferenceRag):
+        async def build_index(self, corpus, config):
+            return None
+
+    with pytest.raises(ValueError, match="not about"):
+        await measure_pool_curve(
+            Indexing(),
+            _cases(2),
+            config={},
+            metric="recall@3",
+            documents=_docs(5),  # no doc_id the golden set references
+            target_pool_size=1000,
+        )
+
+
+async def test_extrapolation_needs_build_index():
+    from ragci.sweep import measure_pool_curve
+
+    class NoIndex:
+        __ragci_spec__ = ReferenceRag.__ragci_spec__
+
+        def retrieve(self, query, index, config):
+            return ReferenceRag().retrieve(query, index, config)
+
+    with pytest.raises(ValueError, match="needs build_index"):
+        await measure_pool_curve(
+            NoIndex(),
+            _cases(2),
+            config={},
+            metric="recall@3",
+            documents=_docs(5),
+            target_pool_size=1000,
+        )
+
+
+async def test_a_sweep_without_extrapolate_to_reports_no_curve():
+    outcome = await sweep_adapter(
+        ReferenceRag(), _cases(), spec=ReferenceRag.__ragci_spec__, metric="recall@3"
+    )
+    assert outcome.pool_curve is None
+
+
+async def test_extrapolating_without_a_corpus_is_rejected():
+    with pytest.raises(ValueError, match="needs a corpus"):
+        await sweep_adapter(
+            ReferenceRag(),
+            _cases(),
+            spec=ReferenceRag.__ragci_spec__,
+            metric="recall@3",
+            extrapolate_to=1000,
+        )

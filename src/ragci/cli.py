@@ -270,6 +270,13 @@ def sweep(
     out: Path = typer.Option(Path(".ragci/sweep.json"), help="Where to write the outcome"),
     seed: int = typer.Option(0, help="Seed, for a reproducible winner"),
     alpha: float = typer.Option(0.05, help="Significance level for the final comparison"),
+    corpus: Path = typer.Option(
+        None, help="Corpus to vary the pool size over, for --extrapolate-to"
+    ),
+    extrapolate_to: int = typer.Option(
+        None, help="Project the winner's score to a corpus of this many documents"
+    ),
+    pool_points: int = typer.Option(4, help="How many pool sizes to measure for the projection"),
 ) -> None:
     """Find the configuration that actually wins, without evaluating the whole grid."""
     instance = load_adapter(adapter)
@@ -285,6 +292,9 @@ def sweep(
                 metric=metric or spec.primary_metric,
                 eta=eta,
                 alpha=alpha,
+                corpus=list(load_corpus(corpus)) if corpus else None,
+                extrapolate_to=extrapolate_to,
+                pool_points=pool_points,
                 min_cases=min_cases,
                 only=list(only) if only else None,
                 seed=seed,

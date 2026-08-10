@@ -140,6 +140,36 @@ def _render_verdict(console: Console, outcome: "SweepOutcome") -> None:
         )
 
 
+def _render_pool_curve(console: Console, outcome: "SweepOutcome") -> None:
+    """What the winner's score projects to at full corpus size — or why it will not."""
+    curve = outcome.pool_curve
+    if curve is None:
+        return
+
+    if curve.flat:
+        console.print(
+            "[yellow]No projection:[/] the score did not move across the pool sizes "
+            "measured, so there is no trend to extend. A plateau over the range you "
+            "measured is not evidence of one beyond it — widen the range."
+        )
+        return
+
+    if not curve.reliable:
+        console.print(
+            f"[yellow]No projection:[/] the measured points do not follow the log-linear "
+            f"shape retrieval usually degrades along (R²={curve.r_squared:.2f}). "
+            "Extrapolating from them would invent a number — measure more pool sizes."
+        )
+        return
+
+    console.print(
+        f"Projected to {curve.target_pool_size:,} documents: "
+        f"[bold]{curve.extrapolated:.3f}[/] "
+        f"(95% CI [{curve.ci_low:.3f}, {curve.ci_high:.3f}], R²={curve.r_squared:.2f}). "
+        "A projection, not a measurement."
+    )
+
+
 def render_sweep(outcome: "SweepOutcome", console: Console | None = None) -> None:
     """Ranked configurations, with the cost of the search stated rather than implied."""
     console = console or Console()
@@ -177,6 +207,7 @@ def render_sweep(outcome: "SweepOutcome", console: Console | None = None) -> Non
         )
 
     _render_verdict(console, outcome)
+    _render_pool_curve(console, outcome)
 
     spent = sum(e.n_cases for e in outcome.evaluations)
     saved = 100 * (1 - spent / outcome.full_grid_cost) if outcome.full_grid_cost else 0

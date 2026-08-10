@@ -20,6 +20,8 @@ class PoolCurve(BaseModel):
     intercept: float
     r_squared: float
     reliable: bool
+    # Every measured score identical: no trend to fit, and no evidence of degradation.
+    flat: bool = False
     extrapolated: float
     ci_low: float
     ci_high: float
@@ -55,7 +57,13 @@ def fit_pool_curve(
 
     residual = float(np.sum((y - (slope * x + intercept)) ** 2))
     total = float(np.sum((y - y.mean()) ** 2))
-    r_squared = 1.0 - residual / total if total > 0 else 1.0
+    # Identical scores at every pool size leave nothing for a line to explain. Calling
+    # that a perfect fit would project a flat plateau to any corpus size with a
+    # zero-width interval — maximum confidence from an absence of evidence. Not
+    # observing degradation across the sizes you measured is not proof there is none
+    # three decades further out.
+    flat = total == 0.0
+    r_squared = 1.0 if flat else 1.0 - residual / total
 
     target_x = math.log10(target_pool_size)
     extrapolated = float(np.clip(slope * target_x + intercept, 0.0, 1.0))
@@ -75,8 +83,10 @@ def fit_pool_curve(
         slope=slope,
         intercept=intercept,
         r_squared=r_squared,
+        flat=flat,
         # Two points always fit a line perfectly; r_squared carries no information there.
-        reliable=len(points) >= 3 and r_squared >= min_r_squared,
+        # Neither does a flat series — see above.
+        reliable=len(points) >= 3 and not flat and r_squared >= min_r_squared,
         extrapolated=extrapolated,
         ci_low=float(band[0]),
         ci_high=float(band[1]),
