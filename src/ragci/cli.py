@@ -343,6 +343,7 @@ def sweep(
     cache: bool = typer.Option(
         False, help="Reuse evaluations from .ragci/cache when nothing that decides them changed"
     ),
+    report: Path = typer.Option(None, help="Write a self-contained HTML report here"),
 ) -> None:
     """Find the configuration that actually wins, without evaluating the whole grid."""
     instance = load_adapter(adapter)
@@ -383,6 +384,11 @@ def sweep(
         raise typer.Exit(code=1) from exc
 
     render_sweep(outcome, console=console)
+    if report is not None:
+        from ragci.htmlreport import save_html
+
+        save_html(outcome, report)
+        console.print(f"HTML report written to {escape(str(report))}")
     if run_cache is not None:
         stats = run_cache.stats
         console.print(
