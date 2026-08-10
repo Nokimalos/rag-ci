@@ -262,6 +262,14 @@ def golden_review(
 
 
 @app.command()
+def demo() -> None:
+    """See a regression caught, end to end, on a corpus that ships with rag-ci."""
+    from ragci.demo import run_demo
+
+    raise typer.Exit(asyncio.run(run_demo(console)))
+
+
+@app.command()
 def sweep(
     adapter: Path = typer.Option(Path("ragci_adapter.py"), help="Path to your adapter"),
     golden: Path = typer.Option(Path("golden.jsonl"), help="Path to the golden set"),
