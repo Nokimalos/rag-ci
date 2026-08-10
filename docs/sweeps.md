@@ -139,9 +139,26 @@ sub-corpus, then validate the finalists at full scale.
 The catch is that a sub-corpus **overstates** recall: fewer distractors, easier retrieval.
 Reporting that number as if it were the real one is the dishonest option.
 
-**`ragci.poolcurve` is a standalone module, not part of `sweep`.** Import and call it
-yourself; `rag-ci sweep` does not extrapolate, and reports only what it measured. Wiring
-the two together is designed but unimplemented.
+Pass `--extrapolate-to N` with a `--corpus`, and the sweep measures the winner at growing
+pool sizes and projects to a corpus of `N` documents:
+
+```console
+Projected to 1,000,000 documents: 0.612 (95% CI [0.548, 0.671], R²=0.97).
+A projection, not a measurement.
+```
+
+**Every pool keeps the documents the golden set needs.** Only the distractors grow. Slicing
+the corpus instead would remove the documents the questions are about, and the curve would
+measure "the answer is no longer there" rather than "the answer is harder to find" —
+recall would collapse for a reason that has nothing to do with scale.
+
+The projection is refused in two cases, each with its own message: when the measured points
+do not follow a log-linear shape (`R² < 0.9`), and when the score never moved across the
+range you measured. A plateau is not a trend, and extending one to a corpus a thousand times
+larger would be maximum confidence drawn from an absence of evidence.
+
+Cost: one index build and one evaluation per pool size, on the winner only. `--pool-points`
+sets how many sizes to measure (default 4, minimum 3 for a fit that can be judged).
 
 `ragci.poolcurve` measures the metric at increasing pool sizes and fits recall against
 `log10(pool size)`, which is roughly how retrieval degrades as distractors accumulate. It

@@ -91,3 +91,15 @@ def test_a_non_positive_pool_size_is_rejected():
             [PoolPoint(pool_size=0, score=0.9), PoolPoint(pool_size=10, score=0.8)],
             target_pool_size=100,
         )
+
+
+def test_a_flat_series_is_not_a_perfect_fit():
+    # Identical scores at every size mean no degradation was observed — which is not
+    # the same as proving there is none a thousand times further out. Reporting
+    # "1.000, CI [1.000, 1.000]" from that is maximum confidence from no evidence.
+    curve = fit_pool_curve(
+        [PoolPoint(pool_size=n, score=1.0) for n in (10, 100, 1000)],
+        target_pool_size=1_000_000,
+    )
+    assert curve.reliable is False
+    assert curve.extrapolated == 1.0  # the number is still reported, just not trusted

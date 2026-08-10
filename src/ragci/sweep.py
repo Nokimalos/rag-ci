@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ragci.contract import AdapterSpec
+from ragci.poolcurve import PoolCurve, PoolPoint, fit_pool_curve
 from ragci.stats import holm_bonferroni, paired_bootstrap_test
 
 Config = dict[str, Any]
@@ -91,6 +92,8 @@ class SweepOutcome(BaseModel):
     arbitrary_elimination: bool = False
     # The winner against each of its co-finalists. Empty when it had none to beat.
     comparisons: list[Comparison] = []
+    # Present only when --extrapolate-to asked for a projection past the measured corpus.
+    pool_curve: PoolCurve | None = None
 
     @property
     def winner_is_significant(self) -> bool:
@@ -345,6 +348,8 @@ async def sweep_adapter(
     seed: int = 0,
     alpha: float = 0.05,
     corpus: Any = None,
+    extrapolate_to: int | None = None,
+    pool_points: int = 4,
 ) -> SweepOutcome:
     """Sweep a real adapter, rebuilding its index as rarely as the grid allows."""
     from ragci.runner import _call, run_cases  # local: keeps sweep importable on its own
@@ -383,6 +388,109 @@ async def sweep_adapter(
             for result in record.case_results
         ]
 
-    return await _run_halving(
+    outcome = await _run_halving(
         grid, evaluate, total_cases, eta, min_cases, index_keys, alpha=alpha, seed=seed
     )
+
+    if extrapolate_to is not None:
+        if corpus is None:
+            raise ValueError("extrapolating needs a corpus to vary the pool size over")
+        outcome.pool_curve = await measure_pool_curve(
+            adapter,
+            cases[:total_cases],
+            config=outcome.winner,
+            metric=metric,
+            documents=list(corpus),
+            target_pool_size=extrapolate_to,
+            points=pool_points,
+            seed=seed,
+        )
+    return outcome
+
+
+def split_pool(documents: Sequence[Any], required_doc_ids: set[str]) -> tuple[list[Any], list[Any]]:
+    """Documents the golden set needs, and everything else — the distractors.
+
+    The split is the whole point of measuring a curve. Shrinking a corpus by slicing it
+    drops the documents the questions are about, and what you then measure is "the answer
+    is no longer in the pool", not "the answer is harder to find among more distractors".
+    Recall would collapse for a reason that has nothing to do with scale.
+    """
+    required, distractors = [], []
+    for document in documents:
+        doc_id = getattr(document, "doc_id", None)
+        (required if doc_id in required_doc_ids else distractors).append(document)
+    return required, distractors
+
+
+def pool_plan(n_required: int, n_distractors: int, *, points: int = 4) -> list[int]:
+    """Pool sizes to measure at: log-spaced, because recall degrades in log(pool size).
+
+    Always ends at the full corpus, and never proposes a pool too small to hold the
+    documents the questions need.
+    """
+    if points < 2:
+        raise ValueError("a curve needs at least two points")
+
+    total = n_required + n_distractors
+    smallest = max(n_required, 1)
+    if total <= smallest:
+        return [total]
+
+    ratio = (total / smallest) ** (1 / (points - 1))
+    sizes = sorted({min(total, int(round(smallest * ratio**i))) for i in range(points)})
+    sizes[-1] = total
+    return sizes
+
+
+async def measure_pool_curve(
+    adapter,
+    cases: Sequence[Any],
+    *,
+    config: Config,
+    metric: str,
+    documents: Sequence[Any],
+    target_pool_size: int,
+    points: int = 4,
+    seed: int = 0,
+) -> PoolCurve:
+    """Measure one configuration at growing pool sizes and project past the corpus.
+
+    A sub-corpus flatters retrieval: fewer distractors, easier ranking. Reporting that
+    number as if it were the real one is the failure this exists to prevent.
+    """
+    from ragci.runner import _call, run_cases
+
+    if not hasattr(adapter, "build_index"):
+        raise ValueError(
+            "extrapolating needs build_index: the pool size is what changes between "
+            "measurements, and only reindexing can change it"
+        )
+
+    required_ids = {
+        passage.doc_id for case in cases for passage in getattr(case, "required_passages", [])
+    }
+    required, distractors = split_pool(documents, required_ids)
+    if not required:
+        raise ValueError(
+            "no document in the corpus matches a doc_id in the golden set — the curve "
+            "would measure a corpus the questions are not about"
+        )
+
+    measured: list[PoolPoint] = []
+    for size in pool_plan(len(required), len(distractors), points=points):
+        pool = [*required, *distractors[: size - len(required)]]
+        index = await _call(adapter.build_index, pool, config)
+        record = await run_cases(
+            adapter,
+            cases,
+            config=config,
+            metric_names=[metric],
+            golden_hash="poolcurve",
+            index=index,
+            seed=seed,
+        )
+        summary = record.metrics.get(metric)
+        measured.append(PoolPoint(pool_size=len(pool), score=summary.mean if summary else 0.0))
+
+    return fit_pool_curve(measured, target_pool_size=target_pool_size, seed=seed)

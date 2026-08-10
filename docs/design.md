@@ -8,8 +8,7 @@ This document tracks intent, not progress. See the README for what actually ship
 
 **Designed but not implemented as of 0.4.2** — listed here so nothing below reads as a
 feature list: a content-addressed disk cache, two-stage evaluation on large corpora,
-retries, `--max-cost`, gating on latency, and `ragci.poolcurve` wired into `sweep`
-(importable and tested, but standalone).
+retries, `--max-cost`, and gating on latency.
 
 *Last revised 2026-08-10.*
 

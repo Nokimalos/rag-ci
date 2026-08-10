@@ -215,3 +215,62 @@ def test_the_sweep_report_says_nothing_about_significance_with_one_configuration
     console = Console(record=True, width=100)
     render_sweep(_sweep([]), console)
     assert "winner" not in console.export_text().lower().replace("← winner", "")
+
+
+def _curve(**overrides):
+    from ragci.poolcurve import PoolCurve
+
+    defaults = dict(
+        slope=-0.1,
+        intercept=1.0,
+        r_squared=0.97,
+        reliable=True,
+        flat=False,
+        extrapolated=0.612,
+        ci_low=0.548,
+        ci_high=0.671,
+        target_pool_size=1_000_000,
+    )
+    return PoolCurve(**{**defaults, **overrides})
+
+
+def _sweep_with_curve(curve):
+    outcome = _sweep([])
+    outcome.pool_curve = curve
+    return outcome
+
+
+def test_a_reliable_projection_is_reported_as_a_projection():
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_sweep_with_curve(_curve()), console)
+
+    # rich wraps at the console width, so a phrase can straddle a newline.
+    out = " ".join(console.export_text().split())
+    assert "1,000,000" in out and "0.612" in out
+    assert "not a measurement" in out
+
+
+def test_a_poor_fit_reports_no_projection():
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_sweep_with_curve(_curve(reliable=False, r_squared=0.42)), console)
+
+    out = " ".join(console.export_text().split())
+    assert "No projection" in out
+    assert "0.612" not in out  # the number is not shown as if it were usable
+
+
+def test_a_flat_series_gets_its_own_explanation_not_a_bad_fit_one():
+    # R² is 1.00 for a flat series, so the generic "does not follow the shape" message
+    # would contradict the number printed beside it.
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_sweep_with_curve(_curve(reliable=False, r_squared=1.0, flat=True)), console)
+
+    out = " ".join(console.export_text().split())
+    assert "did not move" in out
+    assert "log-linear" not in out
