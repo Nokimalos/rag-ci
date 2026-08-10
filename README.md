@@ -88,6 +88,7 @@ uvx rag-ci golden gen      # generate candidate questions            ✅
 uvx rag-ci golden review   # accept / edit / reject, then commit     ✅
 uvx rag-ci run             # measure, with confidence intervals      ✅
 uvx rag-ci gate            # fail the PR only on a real regression   ✅
+uvx rag-ci sweep --report  # a shareable HTML page of the result       ✅
 uvx rag-ci sweep --cache   # find the configuration that provably wins ✅
 uvx rag-ci run --judge     # score answer grounding, not just recall ✅
 uvx rag-ci judge calibrate # check the judge before trusting it      ✅

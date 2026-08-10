@@ -34,6 +34,24 @@ the final rung. Picking it over these is a preference, not a measured improvemen
 Tune the threshold with `--alpha`. `outcome.decisive` is `False` whenever the winner did
 not separate itself, so a script can act on it without parsing the text.
 
+## Sharing the result
+
+```bash
+uvx rag-ci sweep --report report.html
+```
+
+One self-contained page — no CDN, no fonts, no scripts, nothing fetched at render time. A
+report that needs the network renders as a blank box the day the host moves.
+
+It carries what the terminal shows and a little the terminal cannot: the verdict with each
+finalist's interval and p-value, the tie-break warning when the cut was one, the projection
+when there is one, and the search cost.
+
+**Configurations eliminated earlier get their own table, below the finalists**, with the
+reason attached. They were scored on fewer cases, so charting them beside the final rung
+would invite a comparison the numbers do not support — and a page makes that comparison
+look far more convincing than a table of numbers does.
+
 ## Reusing evaluations
 
 A sweep re-evaluates configurations across rungs, and re-running one after changing a
