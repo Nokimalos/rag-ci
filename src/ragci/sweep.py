@@ -350,6 +350,7 @@ async def sweep_adapter(
     corpus: Any = None,
     extrapolate_to: int | None = None,
     pool_points: int = 4,
+    cache: Any = None,
 ) -> SweepOutcome:
     """Sweep a real adapter, rebuilding its index as rarely as the grid allows."""
     from ragci.runner import _call, run_cases  # local: keeps sweep importable on its own
@@ -364,22 +365,33 @@ async def sweep_adapter(
     built: dict[tuple, Any] = {}
 
     async def evaluate(config: Config, rung_cases: int) -> list[float]:
-        index = None
-        if hasattr(adapter, "build_index"):
-            signature = index_signature(config, index_keys)
-            if signature not in built:
-                built.clear()  # one live index at a time: they can be large
-                built[signature] = await _call(adapter.build_index, corpus, config)
-            index = built[signature]
-        record = await run_cases(
-            adapter,
-            cases[:rung_cases],
-            config=config,
-            metric_names=[metric],
-            golden_hash="sweep",
-            index=index,
-            seed=seed,
-        )
+        rung_slice = cases[:rung_cases]
+
+        # Ask the cache before building anything. On a large corpus the index build is
+        # the dominant cost of a sweep, so a hit that still reindexed would save the
+        # cheap half and pay for the expensive one.
+        key = cache.key(config=config, cases=rung_slice, metrics=[metric]) if cache else None
+        record = cache.get(key) if key else None
+
+        if record is None:
+            index = None
+            if hasattr(adapter, "build_index"):
+                signature = index_signature(config, index_keys)
+                if signature not in built:
+                    built.clear()  # one live index at a time: they can be large
+                    built[signature] = await _call(adapter.build_index, corpus, config)
+                index = built[signature]
+            record = await run_cases(
+                adapter,
+                rung_slice,
+                config=config,
+                metric_names=[metric],
+                golden_hash="sweep",
+                index=index,
+                seed=seed,
+            )
+            if key:
+                cache.put(key, record)
         # One slot per case, in case order, so finalists line up pair-for-pair. An
         # errored case is None rather than dropped: dropping it would shorten this
         # configuration's list and silently misalign every later pair.
