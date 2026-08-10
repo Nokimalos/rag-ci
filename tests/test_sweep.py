@@ -551,3 +551,55 @@ async def test_extrapolating_without_a_corpus_is_rejected():
             metric="recall@3",
             extrapolate_to=1000,
         )
+
+
+# --- Reusing evaluations instead of paying twice --------------------------------------
+
+
+async def test_a_cached_sweep_skips_the_index_rebuild_too():
+    # The index build is the dominant cost on a real corpus. A cache hit that still
+    # reindexed would save the cheap half of the work and pay for the expensive half.
+    import tempfile
+
+    from ragci import __version__
+    from ragci.cache import RunCache
+
+    builds = {"count": 0}
+
+    class Counting(ReferenceRag):
+        def build_index(self, corpus, config):
+            builds["count"] += 1
+            return None
+
+    with tempfile.TemporaryDirectory() as root:
+        cache = RunCache(root, fingerprint="fixed", version=__version__)
+        kwargs = dict(spec=ReferenceRag.__ragci_spec__, metric="recall@3", cache=cache)
+
+        await sweep_adapter(Counting(), _cases(12), **kwargs)
+        first_builds, first_misses = builds["count"], cache.stats.misses
+        assert first_builds > 0 and first_misses > 0
+
+        await sweep_adapter(Counting(), _cases(12), **kwargs)
+        assert builds["count"] == first_builds, "second sweep rebuilt an index it had cached"
+        assert cache.stats.hits >= first_misses
+
+
+async def test_a_sweep_without_a_cache_behaves_exactly_as_before():
+    import tempfile
+
+    from ragci import __version__
+    from ragci.cache import RunCache
+
+    plain = await sweep_adapter(
+        ReferenceRag(), _cases(12), spec=ReferenceRag.__ragci_spec__, metric="recall@3"
+    )
+    with tempfile.TemporaryDirectory() as root:
+        cached = await sweep_adapter(
+            ReferenceRag(),
+            _cases(12),
+            spec=ReferenceRag.__ragci_spec__,
+            metric="recall@3",
+            cache=RunCache(root, fingerprint="fixed", version=__version__),
+        )
+    assert plain.winner == cached.winner
+    assert [e.score for e in plain.evaluations] == [e.score for e in cached.evaluations]

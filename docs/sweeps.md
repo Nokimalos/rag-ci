@@ -34,6 +34,34 @@ the final rung. Picking it over these is a preference, not a measured improvemen
 Tune the threshold with `--alpha`. `outcome.decisive` is `False` whenever the winner did
 not separate itself, so a script can act on it without parsing the text.
 
+## Reusing evaluations
+
+A sweep re-evaluates configurations across rungs, and re-running one after changing a
+single parameter re-measures everything that did not change. With an LLM judge in the loop
+that is slow *and* billed.
+
+```bash
+uvx rag-ci sweep --cache
+```
+
+Measured on a four-configuration grid: a warm cache reuses all four evaluations and
+rebuilds **zero** indexes, against two rebuilds cold. The cache is consulted *before* the
+index is built, because on a real corpus reindexing is the dominant cost — a hit that
+still reindexed would save the cheap half of the work.
+
+### It is off by default, and that is deliberate
+
+A cache that serves a stale result is worse than no cache, because what this tool emits is
+a verdict people act on. The key covers everything that decides an evaluation: the
+adapter's source, the configuration, the exact cases in order, the metrics, and the rag-ci
+version — so editing your retriever, reordering the golden set, or upgrading rag-ci all
+invalidate it.
+
+What a key **cannot** cover is anything outside your adapter file: an embedding service
+that changed behind the same API, an index rebuilt by another process, a vector store
+mutated between runs. Nothing can detect those, which is why you opt in rather than opt
+out. `rm -rf .ragci/cache` when in doubt; re-measuring is always available.
+
 ### What this costs
 
 Carrying a runner-up to the end is one extra full-corpus evaluation. On nine

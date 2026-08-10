@@ -12,6 +12,7 @@ from rich.markup import escape
 
 from ragci import __version__
 from ragci.baseline import DEFAULT_ALPHA, DEFAULT_MIN_EFFECT, decide
+from ragci.cache import fingerprint_file
 from ragci.contract import AdapterSpec
 from ragci.corpus import CorpusError, load_corpus, sample_with_report
 from ragci.generate import DEFAULT_MODEL, AnthropicGenerator, generate_candidates
@@ -337,11 +338,25 @@ def sweep(
         None, help="Project the winner's score to a corpus of this many documents"
     ),
     pool_points: int = typer.Option(4, help="How many pool sizes to measure for the projection"),
+    cache: bool = typer.Option(
+        False, help="Reuse evaluations from .ragci/cache when nothing that decides them changed"
+    ),
 ) -> None:
     """Find the configuration that actually wins, without evaluating the whole grid."""
     instance = load_adapter(adapter)
     spec = instance.__ragci_spec__
     cases = list(load_golden(golden))
+
+    run_cache = None
+    if cache:
+        from ragci import __version__
+        from ragci.cache import RunCache
+
+        run_cache = RunCache(
+            Path(".ragci/cache"),
+            fingerprint=fingerprint_file(adapter),
+            version=__version__,
+        )
 
     try:
         outcome = asyncio.run(
@@ -355,6 +370,7 @@ def sweep(
                 corpus=list(load_corpus(corpus)) if corpus else None,
                 extrapolate_to=extrapolate_to,
                 pool_points=pool_points,
+                cache=run_cache,
                 min_cases=min_cases,
                 only=list(only) if only else None,
                 seed=seed,
@@ -365,6 +381,12 @@ def sweep(
         raise typer.Exit(code=1) from exc
 
     render_sweep(outcome, console=console)
+    if run_cache is not None:
+        stats = run_cache.stats
+        console.print(
+            f"[dim]Cache: {stats.hits} evaluation(s) reused, {stats.misses} measured. "
+            "Delete .ragci/cache to force a full re-measure.[/]"
+        )
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     Path(out).write_text(outcome.model_dump_json(indent=2), encoding="utf-8")
     console.print(f"Sweep outcome written to {escape(str(out))}")
