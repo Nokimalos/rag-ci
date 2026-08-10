@@ -202,7 +202,9 @@ def golden_gen(
     """Generate candidate questions from a corpus."""
     keys = tuple(stratify_by) if stratify_by else ("source",)
     try:
-        documents, report = sample_with_report(load_corpus(corpus), n=sample, keys=keys, seed=seed)
+        documents, report = sample_with_report(
+            lambda: load_corpus(corpus), n=sample, keys=keys, seed=seed
+        )
     except CorpusError as exc:
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(code=1) from exc

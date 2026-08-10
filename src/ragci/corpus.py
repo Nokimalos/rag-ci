@@ -1,7 +1,7 @@
 """Reading a corpus without ever holding it in memory."""
 
 import random
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -76,8 +76,25 @@ def stratum_key(document: Document, keys: Sequence[str]) -> tuple[str, ...]:
     return tuple(str(document.metadata.get(key, MISSING)) for key in keys)
 
 
+CorpusSource = Iterable[Document] | Callable[[], Iterable[Document]]
+
+
+def _reader(documents: CorpusSource) -> Callable[[], Iterable[Document]]:
+    """Something that can be walked twice.
+
+    A callable is genuinely re-read, holding nothing but identifiers between passes.
+    Anything else may be a one-shot iterator, so it is materialised once — walking an
+    exhausted generator a second time would silently yield nothing and look like the
+    corpus had changed underneath us.
+    """
+    if callable(documents):
+        return documents
+    materialised = list(documents)
+    return lambda: materialised
+
+
 def sample_with_report(
-    documents: Iterable[Document],
+    documents: CorpusSource,
     *,
     n: int,
     keys: Sequence[str] = ("source",),
@@ -87,12 +104,21 @@ def sample_with_report(
 
     Proportional allocation alone lets a source holding 0.1% of the corpus be sampled
     out of existence — which is precisely the case a golden set most needs covered.
+
+    Pass a **callable** returning an iterable — `lambda: load_corpus(path)` — and the
+    corpus is read twice while only identifiers are held between the passes: choosing
+    what to sample needs a doc_id and a stratum key per document, never the text. On a
+    million documents that is the difference between tens of megabytes and the whole
+    corpus resident. Passing an iterable directly still works and still materialises
+    everything; it is the convenient path, not the scalable one.
     """
-    buckets: dict[tuple[str, ...], list[Document]] = {}
+    read = _reader(documents)
+
+    buckets: dict[tuple[str, ...], list[str]] = {}
     total = 0
-    for document in documents:
+    for document in read():
         total += 1
-        buckets.setdefault(stratum_key(document, keys), []).append(document)
+        buckets.setdefault(stratum_key(document, keys), []).append(document.doc_id)
 
     if total == 0:
         raise CorpusError("cannot sample: the corpus contains no documents")
@@ -125,14 +151,32 @@ def sample_with_report(
             allocation[key] += take
             remaining -= take
 
-    sample: list[Document] = []
+    strata = len(buckets)
+    chosen: list[str] = []
     for key in order:
-        pool = sorted(buckets[key], key=lambda d: d.doc_id)
-        sample.extend(rng.sample(pool, allocation[key]))
+        chosen.extend(rng.sample(sorted(buckets[key]), allocation[key]))
+    buckets.clear()  # the identifiers are no longer needed; only `chosen` is
+
+    # Second pass: materialise only the documents that were selected. Collected by
+    # doc_id, then re-ordered to match `chosen` so the result does not depend on the
+    # order the corpus happens to be stored in.
+    wanted = set(chosen)
+    found: dict[str, Document] = {}
+    for document in read():
+        if document.doc_id in wanted and document.doc_id not in found:
+            found[document.doc_id] = document
+    sample = [found[doc_id] for doc_id in chosen if doc_id in found]
+
+    if len(sample) != len(chosen):
+        raise CorpusError(
+            "the corpus changed between the two passes: "
+            f"{len(chosen) - len(sample)} sampled document(s) were not found the second "
+            "time. Sample from a snapshot rather than a corpus being written to."
+        )
 
     report = SampleReport(
         total=total,
-        strata=len(buckets),
+        strata=strata,
         sampled=len(sample),
         per_stratum={"/".join(key): allocation[key] for key in order},
     )

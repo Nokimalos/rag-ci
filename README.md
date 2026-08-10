@@ -126,11 +126,11 @@ repository.
 - **A two-condition gate.** A regression blocks the build only when it is both statistically
   significant and larger than `min-effect`. Significance alone would block on trivia;
   effect size alone would block on noise.
-- **Designed around large corpora.** Stratified sampling for question generation, successive
-  halving instead of grid search, and index-time and query-time parameters separated so
-  sweeps rebuild indexes as rarely as possible. Two caveats worth knowing before you scale:
-  question generation loads the sampled documents into memory, and the recall-vs-pool-size
-  curve in `ragci.poolcurve` is not yet wired into `sweep`.
+- **Built for large corpora.** Question generation streams the corpus and holds only
+  identifiers while it decides what to sample, never the text. Sweeps use successive halving
+  instead of grid search, separate index-time from query-time parameters so indexes are
+  rebuilt as rarely as possible, and `--extrapolate-to` projects a sub-corpus result to full
+  scale — refusing to project when the measured points do not support it.
 - **Agnostic by design.** No RAG framework as a dependency. You write one adapter file; your
   stack stays yours. The adapter contract captures multi-step retrieval trajectories, so
   agentic and multi-hop pipelines are first-class.

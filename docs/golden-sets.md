@@ -49,6 +49,19 @@ The command prints its coverage so you can see what it did:
 Corpus: 5012 documents across 2 strata; sampled 20.
 ```
 
+### It does not load your corpus
+
+Deciding what to sample needs a `doc_id` and a stratum key per document — never the text.
+So the corpus is read twice: the first pass counts and stratifies while holding only those
+identifiers, the second materialises just the documents that were selected. Measured on
+20,000 documents of 2 KB each, peak memory is 1.3 MB against 15.4 MB for the naive path,
+and the gap widens as documents get larger.
+
+Calling `sample_with_report` from your own code gets the same treatment if you hand it a
+callable — `sample_with_report(lambda: load_corpus(path), n=20)`. Passing an iterable
+directly still works and still materialises everything, because a bare generator cannot be
+walked a second time.
+
 ## Generation costs one model call per passage
 
 A sampled document usually yields several passages, and each passage is one API call. Start

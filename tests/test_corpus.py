@@ -180,3 +180,53 @@ def test_the_report_states_coverage():
 def test_sampling_an_empty_corpus_is_rejected():
     with pytest.raises(CorpusError, match="no documents"):
         stratified_sample([], n=5)
+
+
+def _big_corpus(n: int, sources: int = 4):
+    """A generator, not a list: nothing here is ever all in memory at once."""
+    for i in range(n):
+        yield Document(
+            doc_id=f"doc{i}",
+            text="x" * 1000,
+            metadata={"source": f"s{i % sources}"},
+        )
+
+
+def test_a_callable_source_is_read_twice_and_holds_no_text_between_passes():
+    passes = []
+
+    def read():
+        passes.append(1)
+        return _big_corpus(500)
+
+    sample, report = sample_with_report(read, n=20, seed=0)
+    assert len(passes) == 2  # count and stratify, then materialise only the winners
+    assert report.total == 500
+    assert len(sample) == 20
+
+
+def test_the_callable_path_returns_the_same_sample_as_the_iterable_path():
+    # The two-pass rewrite must not change which documents come back, or every golden
+    # set generated before it would silently stop being reproducible.
+    from_iterable, _ = sample_with_report(list(_big_corpus(200)), n=15, seed=7)
+    from_callable, _ = sample_with_report(lambda: _big_corpus(200), n=15, seed=7)
+    assert [d.doc_id for d in from_iterable] == [d.doc_id for d in from_callable]
+
+
+def test_a_bare_generator_still_works_rather_than_looking_like_a_changed_corpus():
+    # Walking an exhausted generator twice would find nothing on the second pass.
+    sample, report = sample_with_report(_big_corpus(50), n=10, seed=0)
+    assert len(sample) == 10
+    assert report.total == 50
+
+
+def test_a_corpus_that_shrinks_between_passes_is_reported_as_such():
+    state = {"calls": 0}
+
+    def shrinking():
+        state["calls"] += 1
+        n = 40 if state["calls"] == 1 else 5
+        return _big_corpus(n)
+
+    with pytest.raises(CorpusError, match="changed between the two passes"):
+        sample_with_report(shrinking, n=20, seed=0)
