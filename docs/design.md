@@ -6,7 +6,7 @@ can be argued with rather than rediscovered.
 
 This document tracks intent, not progress. See the README for what actually ships today.
 
-**Designed but not implemented as of 0.4.2** — listed here so nothing below reads as a
+**Designed but not implemented as of 0.5.0** — listed here so nothing below reads as a
 feature list: a content-addressed disk cache, two-stage evaluation on large corpora,
 retries, `--max-cost`, and gating on latency.
 
