@@ -9,29 +9,43 @@
 rag-ci measures every change to your RAG pipeline against a baseline and fails the pull
 request when retrieval actually got worse — not when it merely looks worse.
 
+See it catch one, in one command and under a second — no API key, nothing to download:
+
 ```console
-$ uvx rag-ci run
-     rag-ci run  (6 scored cases)
+$ uvx rag-ci demo
+Built a synthetic corpus: 144 documents, 144 questions anchored to character offsets.
+
+1. Baseline — chunk_size=240
 ┏━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
 ┃ metric     ┃  mean ┃         95% CI ┃
 ┡━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
-│ recall@3 * │ 0.833 │ [0.500, 1.000] │
+│ recall@3 * │ 0.951 │ [0.917, 0.986] │
 └────────────┴───────┴────────────────┘
-latency p50 1 ms  p95 1 ms
 
-$ uvx rag-ci gate --baseline baseline.json
-Gate: Pass — recall@3 moved by +0.000 (95% CI [0.000, 0.000]) over 6 paired cases.
+2. Someone halves the chunk size to fit more of them in context — chunk_size=120
+┏━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ metric     ┃  mean ┃         95% CI ┃
+┡━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ recall@3 * │ 0.736 │ [0.667, 0.806] │
+└────────────┴───────┴────────────────┘
+
+3. The gate compares them over the same questions
+REGRESSION — the gate fails — recall@3 dropped by 0.215
+(95% CI [-0.292, -0.139], p=0.0000) over 144 paired cases.
 ```
 
-That is unedited output from [`examples/reference/`](examples/reference), which you can run
-yourself in two commands. Read the interval, not the mean: six questions pin recall@3 no
-tighter than somewhere between 0.500 and 1.000. Every other evaluation tool would have
-handed you `0.833` and let you believe it.
+Exit code 1. In CI, that is a blocked pull request.
+
+**Nothing there is a recording.** The corpus is generated on your machine and measured on
+the spot, through the same code paths `run` and `gate` use — a canned transcript would
+contradict the one thing this project argues for. Reproduce it yourself; the numbers will
+match, because they are deterministic, not because they were typed in.
 
 ## Why the interval is the point
 
-Cut `top_k` to 1 in that same example and recall@3 falls from 0.833 to 0.667. rag-ci does
-not block:
+The demo above blocks because 144 questions are enough to be sure. The opposite case
+matters just as much. In [`examples/reference/`](examples/reference) — six questions —
+cutting `top_k` to 1 drops recall@3 from 0.833 to 0.667, and rag-ci does **not** block:
 
 ```console
 Gate: Pass — recall@3 moved by -0.167 (95% CI [-0.500, 0.000]) over 6 paired cases.
@@ -67,6 +81,7 @@ Every command below works today; see [the design document](docs/design.md) for h
 together.
 
 ```bash
+uvx rag-ci demo            # watch a regression get caught, in one second ✅
 uvx rag-ci init            # scaffold an adapter for your pipeline   ✅
 uvx rag-ci golden gen      # generate candidate questions            ✅
 uvx rag-ci golden review   # accept / edit / reject, then commit     ✅
