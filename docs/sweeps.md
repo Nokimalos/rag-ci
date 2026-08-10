@@ -87,14 +87,33 @@ configurations and ninety cases the sweep spends 360 case-evaluations instead of
 still well under the 810 an exhaustive grid would cost. That is the price of the verdict,
 and a sweep that cannot tell you whether its winner won is not worth the 280 either.
 
-### The limit worth knowing
+### Choosing on one set, judging on another
 
-The winner is selected and tested on the same cases, so this is post-selection inference
-and the p-values lean optimistic. It answers "is the winner ahead **on these cases**",
-not "will it stay ahead on new ones". The asymmetry is still useful: when even an
-optimistic test finds nothing, the field really is indistinguishable — which is the case
-worth catching. Testing finalists on held-out cases would remove the bias and is tracked
-separately.
+By default the winner is selected and tested on the same cases. That is post-selection
+inference: whichever configuration happens to top the ranking is the one whose lead gets
+measured, on the very data that put it on top, so the p-values lean optimistic. It answers
+"is the winner ahead **on these cases**", not "will it stay ahead on new ones".
+
+```bash
+uvx rag-ci sweep --holdout 0.25
+```
+
+Reserves the last quarter of the golden set, runs the whole search on the rest, then tests
+the finalists on the cases the search never scored them against. The winner is still chosen
+by the search — re-picking it on the holdout would put the bias straight back — and the
+verdict says where it was judged:
+
+```console
+Winner confirmed on 50 held-out cases: ahead of all 2 finalist(s), p ≤ 0.0031.
+```
+
+**A holdout that reserves fewer than 30 cases is refused**, with a message saying so. Ten
+cases cannot separate any two configurations, so reserving them would not remove the bias —
+it would trade a slightly optimistic verdict for a permanently silent one, and cost a tenth
+of the search to do it.
+
+Without a holdout the asymmetry still helps: when even an optimistic test finds nothing,
+the field really is indistinguishable, which is the case most worth catching.
 
 ## What successive halving buys, and what it costs
 

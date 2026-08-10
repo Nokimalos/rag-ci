@@ -344,6 +344,9 @@ def sweep(
         False, help="Reuse evaluations from .ragci/cache when nothing that decides them changed"
     ),
     report: Path = typer.Option(None, help="Write a self-contained HTML report here"),
+    holdout: float = typer.Option(
+        0.0, help="Reserve this fraction of cases to test the winner on, unseen by the search"
+    ),
 ) -> None:
     """Find the configuration that actually wins, without evaluating the whole grid."""
     instance = load_adapter(adapter)
@@ -374,6 +377,7 @@ def sweep(
                 extrapolate_to=extrapolate_to,
                 pool_points=pool_points,
                 cache=run_cache,
+                holdout=holdout,
                 min_cases=min_cases,
                 only=list(only) if only else None,
                 seed=seed,
