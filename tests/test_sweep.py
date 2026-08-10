@@ -603,3 +603,80 @@ async def test_a_sweep_without_a_cache_behaves_exactly_as_before():
         )
     assert plain.winner == cached.winner
     assert [e.score for e in plain.evaluations] == [e.score for e in cached.evaluations]
+
+
+# --- Choosing on one set, judging on another ------------------------------------------
+
+
+def test_no_holdout_leaves_every_case_to_the_search():
+    from ragci.sweep import split_holdout
+
+    searchable, reserved = split_holdout(list(range(100)), 0.0)
+    assert len(searchable) == 100 and reserved == []
+
+
+def test_a_holdout_takes_the_tail_and_leaves_the_rest():
+    from ragci.sweep import split_holdout
+
+    searchable, reserved = split_holdout(list(range(200)), 0.25)
+    assert len(searchable) == 150 and len(reserved) == 50
+    assert searchable + reserved == list(range(200))  # nothing lost, nothing duplicated
+
+
+def test_a_holdout_too_small_to_conclude_anything_is_refused():
+    # Reserving ten cases would not remove the bias, it would trade a slightly optimistic
+    # verdict for a permanently silent one — and cost a tenth of the search to do it.
+    from ragci.sweep import split_holdout
+
+    with pytest.raises(ValueError, match="too few to separate"):
+        split_holdout(list(range(100)), 0.1)
+
+
+@pytest.mark.parametrize("fraction", [-0.1, 1.0, 1.5])
+def test_a_nonsensical_fraction_is_rejected(fraction):
+    from ragci.sweep import split_holdout
+
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        split_holdout(list(range(100)), fraction)
+
+
+async def test_the_winner_is_tested_on_cases_the_search_never_saw():
+    seen: list[int] = []
+
+    class Watching(ReferenceRag):
+        def retrieve(self, query, index, config):
+            seen.append(int(query.rsplit(" ", 1)[-1]))
+            return super().retrieve(query, index, config)
+
+    cases = [
+        GoldenCase(
+            id=f"q{i}",
+            question=f"Gravity is the attraction between masses {i}",
+            required_passages=[
+                Passage(
+                    doc_id="physics",
+                    char_start=0,
+                    char_end=41,
+                    text="Gravity is the attraction between masses.",
+                )
+            ],
+        )
+        for i in range(120)
+    ]
+
+    outcome = await sweep_adapter(
+        Watching(), cases, spec=ReferenceRag.__ragci_spec__, metric="recall@3", holdout=0.25
+    )
+
+    assert outcome.holdout_cases == 30
+    assert outcome.comparisons, "the finalists should have been compared on the holdout"
+    # The reserved tail is the last 30 questions; the search must have run on the rest.
+    assert max(seen) >= 119  # the holdout was evaluated
+    assert len([c for c in outcome.evaluations if c.n_cases > 90]) == 0
+
+
+async def test_a_sweep_without_a_holdout_reports_zero_held_out():
+    outcome = await sweep_adapter(
+        ReferenceRag(), _cases(12), spec=ReferenceRag.__ragci_spec__, metric="recall@3"
+    )
+    assert outcome.holdout_cases == 0

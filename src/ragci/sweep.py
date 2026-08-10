@@ -80,6 +80,39 @@ class Comparison(BaseModel):
     significant: bool  # after Holm-Bonferroni across the whole family
 
 
+MIN_HOLDOUT_CASES = 30
+
+
+def split_holdout(cases: Sequence[Any], fraction: float) -> tuple[list[Any], list[Any]]:
+    """Split the golden set into cases the search may see and cases kept back from it.
+
+    Selecting the winner and testing it on the same cases is post-selection inference:
+    whichever configuration happens to top the ranking is the one whose lead gets
+    measured, on the very data that put it on top, so the p-values lean optimistic.
+    Holding cases back removes that — the winner is chosen on one set and judged on
+    another it has never been scored against.
+
+    The reservation is refused rather than honoured when it would leave too few cases to
+    conclude anything. A ten-case holdout cannot separate any two configurations, so it
+    would not remove the bias, it would replace a slightly optimistic verdict with a
+    permanently silent one — and cost a tenth of the search to do it.
+    """
+    if not 0.0 <= fraction < 1.0:
+        raise ValueError("holdout must be a fraction between 0 and 1")
+    if fraction == 0.0:
+        return list(cases), []
+
+    reserved_count = int(round(len(cases) * fraction))
+    if reserved_count < MIN_HOLDOUT_CASES:
+        raise ValueError(
+            f"a {fraction:.0%} holdout of {len(cases)} cases reserves {reserved_count}, "
+            f"too few to separate anything (need {MIN_HOLDOUT_CASES}). Add cases, raise "
+            "the fraction, or sweep without a holdout and read the p-values as optimistic."
+        )
+    split = len(cases) - reserved_count
+    return list(cases[:split]), list(cases[split:])
+
+
 class SweepOutcome(BaseModel):
     winner: Config
     evaluations: list[SweepEvaluation]
@@ -94,6 +127,9 @@ class SweepOutcome(BaseModel):
     comparisons: list[Comparison] = []
     # Present only when --extrapolate-to asked for a projection past the measured corpus.
     pool_curve: PoolCurve | None = None
+    # Cases withheld from the search and used only to test the winner. Zero means the
+    # comparisons below were made on the same cases that chose the winner.
+    holdout_cases: int = 0
 
     @property
     def winner_is_significant(self) -> bool:
@@ -351,6 +387,7 @@ async def sweep_adapter(
     extrapolate_to: int | None = None,
     pool_points: int = 4,
     cache: Any = None,
+    holdout: float = 0.0,
 ) -> SweepOutcome:
     """Sweep a real adapter, rebuilding its index as rarely as the grid allows."""
     from ragci.runner import _call, run_cases  # local: keeps sweep importable on its own
@@ -362,11 +399,11 @@ async def sweep_adapter(
     grid = expand_grid(spec, only=only)
     index_keys = [p.name for p in spec.index_time_params if only is None or p.name in only]
     total_cases = n_cases or len(cases)
+    searchable, reserved = split_holdout(cases[:total_cases], holdout)
+    total_cases = len(searchable)
     built: dict[tuple, Any] = {}
 
-    async def evaluate(config: Config, rung_cases: int) -> list[float]:
-        rung_slice = cases[:rung_cases]
-
+    async def evaluate_on(config: Config, rung_slice: Sequence[Any]) -> list[float | None]:
         # Ask the cache before building anything. On a large corpus the index build is
         # the dominant cost of a sweep, so a hit that still reindexed would save the
         # cheap half and pay for the expensive one.
@@ -400,9 +437,19 @@ async def sweep_adapter(
             for result in record.case_results
         ]
 
+    async def evaluate(config: Config, rung_cases: int) -> list[float | None]:
+        return await evaluate_on(config, searchable[:rung_cases])
+
     outcome = await _run_halving(
         grid, evaluate, total_cases, eta, min_cases, index_keys, alpha=alpha, seed=seed
     )
+
+    if reserved:
+        deepest = max(e.rung for e in outcome.evaluations)
+        finalists = [e.config for e in outcome.evaluations if e.rung == deepest]
+        scored = [(config, await evaluate_on(config, reserved)) for config in finalists]
+        outcome.comparisons = _verdict(outcome.winner, scored, alpha=alpha, seed=seed)
+        outcome.holdout_cases = len(reserved)
 
     if extrapolate_to is not None:
         if corpus is None:

@@ -128,17 +128,18 @@ def _render_verdict(console: Console, outcome: "SweepOutcome") -> None:
     if not outcome.comparisons:
         return
 
+    where = f" on {outcome.holdout_cases} held-out cases" if outcome.holdout_cases else ""
     contenders = outcome.contenders
     if not contenders:
         worst = max(c.p_value for c in outcome.comparisons)
         console.print(
-            f"[green]Winner confirmed:[/] ahead of all {len(outcome.comparisons)} "
+            f"[green]Winner confirmed{where}:[/] ahead of all {len(outcome.comparisons)} "
             f"finalist(s), p ≤ {worst:.4f} after Holm-Bonferroni."
         )
         return
 
     console.print(
-        "[yellow]No clear winner:[/] the top configuration is not statistically "
+        f"[yellow]No clear winner{where}:[/] the top configuration is not statistically "
         "separable from the rest of the final rung. Picking it over these is a "
         "preference, not a measured improvement."
     )
