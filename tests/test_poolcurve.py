@@ -102,4 +102,7 @@ def test_a_flat_series_is_not_a_perfect_fit():
         target_pool_size=1_000_000,
     )
     assert curve.reliable is False
-    assert curve.extrapolated == 1.0  # the number is still reported, just not trusted
+    # approx, not ==: polyfit on a flat series lands a hair off 1.0, and how far off
+    # depends on the BLAS underneath numpy. An exact comparison passes locally and
+    # fails on the runner.
+    assert curve.extrapolated == pytest.approx(1.0)  # still reported, just not trusted
