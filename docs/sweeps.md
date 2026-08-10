@@ -7,13 +7,48 @@ uvx rag-ci sweep --metric recall@10
 The sweep searches the parameter grid your adapter declares and reports which
 configuration wins — without evaluating every combination against every case.
 
-> **The sweep ranks mean scores. It does not run a significance test.** Unlike `gate`,
-> which blocks only on a statistically significant regression, `sweep` compares raw means
-> and returns the highest. The winner may be ahead by noise, and the report says so when
-> the elimination cut was arbitrary — but it does not attach a confidence interval or a
-> p-value to the ranking. Treat the winner as a candidate to confirm with `run` and `gate`,
-> not as a proven improvement. Correcting the ranking for multiple comparisons is designed
-> (`ragci.stats.holm_bonferroni` exists and is tested) but not yet wired in.
+## The winner has to beat the field
+
+Ranking picks the largest mean. That is not the same question as *is this configuration
+actually better*, and a sweep that only answers the first one reports coin tosses as
+results.
+
+So the final rung carries at least two configurations, evaluated on the same cases in the
+same order, and the winner is tested against each of them with the paired bootstrap —
+corrected with Holm-Bonferroni, because comparing one winner against nineteen runners-up
+at `alpha=0.05` makes one spurious "significantly better" the expected outcome rather
+than a surprise.
+
+Two possible verdicts:
+
+```console
+Winner confirmed: ahead of all 2 finalist(s), p ≤ 0.0031 after Holm-Bonferroni.
+```
+
+```console
+No clear winner: the top configuration is not statistically separable from the rest of
+the final rung. Picking it over these is a preference, not a measured improvement.
+  vs chunk_size=70, top_k=3: +0.167 (95% CI [0.000, 0.500], p=0.3307)
+```
+
+Tune the threshold with `--alpha`. `outcome.decisive` is `False` whenever the winner did
+not separate itself, so a script can act on it without parsing the text.
+
+### What this costs
+
+Carrying a runner-up to the end is one extra full-corpus evaluation. On nine
+configurations and ninety cases the sweep spends 360 case-evaluations instead of 280 —
+still well under the 810 an exhaustive grid would cost. That is the price of the verdict,
+and a sweep that cannot tell you whether its winner won is not worth the 280 either.
+
+### The limit worth knowing
+
+The winner is selected and tested on the same cases, so this is post-selection inference
+and the p-values lean optimistic. It answers "is the winner ahead **on these cases**",
+not "will it stay ahead on new ones". The asymmetry is still useful: when even an
+optimistic test finds nothing, the field really is indistinguishable — which is the case
+worth catching. Testing finalists on held-out cases would remove the bias and is tracked
+separately.
 
 ## What successive halving buys, and what it costs
 

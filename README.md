@@ -72,7 +72,7 @@ uvx rag-ci golden gen      # generate candidate questions            ✅
 uvx rag-ci golden review   # accept / edit / reject, then commit     ✅
 uvx rag-ci run             # measure, with confidence intervals      ✅
 uvx rag-ci gate            # fail the PR only on a real regression   ✅
-uvx rag-ci sweep           # find the configuration that wins        ✅
+uvx rag-ci sweep           # find the configuration that provably wins ✅
 uvx rag-ci run --judge     # score answer grounding, not just recall ✅
 uvx rag-ci judge calibrate # check the judge before trusting it      ✅
 ```
@@ -120,6 +120,9 @@ repository.
 
 - **Ground truth anchored to document passages, never to chunks.** Change the chunk size and
   your golden set still works. This is what makes sweeping possible at all.
+- **A winner has to beat the field.** `sweep` does not just rank means: it carries the
+  finalists to the last rung, tests the winner against each with a paired bootstrap, and
+  says plainly when the field is indistinguishable instead of naming a coin toss.
 - **A two-condition gate.** A regression blocks the build only when it is both statistically
   significant and larger than `min-effect`. Significance alone would block on trivia;
   effect size alone would block on noise.

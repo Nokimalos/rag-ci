@@ -269,6 +269,7 @@ def sweep(
     only: list[str] = typer.Option(None, help="Restrict the sweep to these parameters"),
     out: Path = typer.Option(Path(".ragci/sweep.json"), help="Where to write the outcome"),
     seed: int = typer.Option(0, help="Seed, for a reproducible winner"),
+    alpha: float = typer.Option(0.05, help="Significance level for the final comparison"),
 ) -> None:
     """Find the configuration that actually wins, without evaluating the whole grid."""
     instance = load_adapter(adapter)
@@ -283,6 +284,7 @@ def sweep(
                 spec=spec,
                 metric=metric or spec.primary_metric,
                 eta=eta,
+                alpha=alpha,
                 min_cases=min_cases,
                 only=list(only) if only else None,
                 seed=seed,

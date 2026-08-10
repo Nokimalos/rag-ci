@@ -158,3 +158,60 @@ def test_markdown_flags_an_invalid_run():
     output = render_markdown(_record(valid=False, error_rate=0.5))
     assert "50%" in output
     assert "invalid" in output.lower()
+
+
+def _sweep(comparisons):
+    from ragci.sweep import Rung, SweepEvaluation, SweepOutcome
+
+    configs = [{"k": 0}] + [c.against for c in comparisons]
+    return SweepOutcome(
+        winner={"k": 0},
+        evaluations=[SweepEvaluation(config=c, score=0.5, n_cases=40, rung=0) for c in configs],
+        rungs=[Rung(index=0, n_configs=len(configs), n_cases=40)],
+        evaluations_run=len(configs),
+        n_configs=len(configs),
+        full_grid_cost=len(configs) * 40,
+        comparisons=comparisons,
+    )
+
+
+def _comparison(k: int, *, significant: bool):
+    from ragci.sweep import Comparison
+
+    return Comparison(
+        against={"k": k},
+        advantage=0.167,
+        ci_low=0.0,
+        ci_high=0.5,
+        p_value=0.0031 if significant else 0.3307,
+        significant=significant,
+    )
+
+
+def test_the_sweep_report_confirms_a_winner_that_beat_the_field():
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_sweep([_comparison(1, significant=True)]), console)
+    assert "Winner confirmed" in console.export_text()
+
+
+def test_the_sweep_report_refuses_to_call_an_indistinguishable_field():
+    # The failure found in the wild: every configuration tied, one of them printed as
+    # "winner", and nothing on screen saying the choice was a tie-break.
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_sweep([_comparison(1, significant=False)]), console)
+
+    out = console.export_text()
+    assert "No clear winner" in out
+    assert "p=0.3307" in out  # the evidence, not just the verdict
+
+
+def test_the_sweep_report_says_nothing_about_significance_with_one_configuration():
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_sweep([]), console)
+    assert "winner" not in console.export_text().lower().replace("← winner", "")
