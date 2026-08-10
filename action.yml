@@ -34,7 +34,7 @@ runs:
     - name: Measure
       shell: bash
       env:
-        RAGCI_VERSION: "0.4.2"
+        RAGCI_VERSION: "0.5.0"
       run: |
         uvx "rag-ci==${RAGCI_VERSION}" run \
           --adapter "${{ inputs.adapter }}" \
@@ -46,7 +46,7 @@ runs:
       id: gate
       shell: bash
       env:
-        RAGCI_VERSION: "0.4.2"
+        RAGCI_VERSION: "0.5.0"
       run: |
         uvx "rag-ci==${RAGCI_VERSION}" gate \
           --run .ragci/run.json \
