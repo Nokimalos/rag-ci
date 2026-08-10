@@ -8,6 +8,78 @@ While the version stays below 1.0, the adapter contract may change in a minor re
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-10
+
+Everything here is additive: nothing changes for a caller who does not pass a new flag.
+
+### Added
+
+- **`rag-ci golden anchor`** turns an existing question/answer set into passage-anchored
+  cases, so a golden set no longer has to start from scratch with an API key. Matching
+  tolerates the whitespace and casing a copy-paste picks up; the offsets it reports address
+  the document exactly as stored. It never guesses — an answer found in one place becomes a
+  case, and anything ambiguous or absent goes to `golden.unresolved.jsonl` for a human. A
+  confidently wrong offset teaches the gate to reward the wrong retrieval, and nothing
+  downstream can detect that.
+- **`rag-ci sweep --cache`** reuses evaluations across runs. Consulted *before* the index is
+  built, since reindexing is the dominant cost of a sweep. Off by default: the key covers
+  the adapter source, configuration, cases, metrics and rag-ci version, but no key can cover
+  an embedding service that changed behind the same API.
+- **`rag-ci run --retries N`** retries a failing case, so a network blip does not push a long
+  run past its 5% error threshold. Recovery is reported rather than hidden — a run that
+  needed several attempts per case says so.
+- **`rag-ci sweep --report report.html`** writes one self-contained page: no CDN, no scripts,
+  nothing fetched at render time. Configurations eliminated on earlier rungs get their own
+  table rather than a bar beside the finalists, because they were scored on fewer cases.
+- **`rag-ci sweep --holdout FRACTION`** tests the winner on cases the search never saw,
+  closing the post-selection bias documented in 0.5.0. The search still picks the winner;
+  re-picking it on the holdout would reintroduce the bias. A holdout reserving fewer than
+  30 cases is refused rather than honoured.
+
+### Changed
+
+- `docs/design.md` no longer lists the cache and retries as unbuilt, and explains why gating
+  on latency is a design question rather than a task: timings are deliberately excluded from
+  the run record so two identical runs produce identical bytes.
+
+
+## [0.5.0] — 2026-08-10
+
+### Fixed
+
+- **Every pull request comment reported `latency p50 0 ms`.** `save_json` excludes timings so
+  two identical runs produce byte-identical output, but `Timings` defaulted to `0.0` — making
+  a record read back off disk indistinguishable from a genuinely instant run. `gate` always
+  reads off disk, so the figure was wrong on every comment it ever posted.
+- **Five claims the code did not support**, including a comparison against promptfoo that was
+  factually wrong: promptfoo does document CI/CD integration. The narrower true claim is that
+  nobody else conditions the build verdict on a significance test.
+
+### Added
+
+- **`rag-ci demo`** runs a real regression end to end in under a second — 144 documents, 144
+  questions, no API key, nothing downloaded. Generated and measured on the spot rather than
+  recorded, because a canned transcript would contradict what this project argues for.
+- **`sweep` tests its winner against the field** with a paired bootstrap and Holm-Bonferroni
+  correction, instead of returning the largest mean, and says plainly when the field is
+  statistically indistinguishable. The final rung now carries at least two configurations —
+  a lone survivor has nobody to be compared against.
+- **`sweep --extrapolate-to N`** projects a sub-corpus result to full scale. Every measured
+  pool keeps the documents the golden set needs, so the curve measures added distractors
+  rather than removed answers, and it refuses to project from points that do not support it.
+- `--alpha`, `--corpus` and `--pool-points` on `sweep`; GitLab CI documentation, where
+  `allow_failure: exit_codes` maps the gate's 1/2 split onto the pipeline itself.
+
+### Changed
+
+- **Question generation streams the corpus**, holding only identifiers between passes:
+  1.3 MB peak instead of 15.4 MB on 20,000 documents, and the gap widens with document size.
+- `successive_halving`'s evaluator returns per-case scores rather than a mean — ranking needs
+  the mean, testing the winner needs the pairs.
+- A flat pool curve is no longer treated as a perfect fit. Identical scores at every size
+  leave nothing for a line to explain, and projecting a plateau with a zero-width interval
+  would be maximum confidence drawn from an absence of evidence.
+
 ## [0.4.2] — 2026-08-09
 
 ### Fixed
