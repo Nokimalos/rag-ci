@@ -28,10 +28,15 @@ class CaseResult(BaseModel):
 
 
 class Timings(BaseModel):
-    """Kept apart from metrics: timings vary run to run and must not break determinism."""
+    """Kept apart from metrics: timings vary run to run and must not break determinism.
 
-    latency_ms_p50: float = 0.0
-    latency_ms_p95: float = 0.0
+    None, not 0.0, is the default: save_json drops this block, so a reloaded record has
+    no timings to report. Zeros would have been indistinguishable from a genuinely
+    instant run, and the pull request comment said `latency p50 0 ms` because of it.
+    """
+
+    latency_ms_p50: float | None = None
+    latency_ms_p95: float | None = None
 
 
 class RunRecord(BaseModel):

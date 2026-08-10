@@ -69,6 +69,23 @@ def test_json_excludes_timings_so_identical_runs_diff_to_nothing(tmp_path):
     assert fast.read_text() == slow.read_text()
 
 
+def test_a_reloaded_record_reports_no_latency_rather_than_zero(tmp_path):
+    # save_json drops timings, so the gate — which always reads a record off disk — used
+    # to render "latency p50 0 ms" into the pull request comment. A run measured at 900ms
+    # was reported as instant.
+    path = tmp_path / "run.json"
+    save_json(_record(timings=Timings(latency_ms_p50=900.0, latency_ms_p95=999.0)), path)
+
+    reloaded = load_json(path)
+    assert reloaded.timings.latency_ms_p50 is None
+    assert "latency" not in render_markdown(reloaded)
+
+
+def test_markdown_reports_latency_when_the_record_is_still_in_memory():
+    record = _record(timings=Timings(latency_ms_p50=900.0, latency_ms_p95=999.0))
+    assert "latency p50 900 ms" in render_markdown(record)
+
+
 def test_saved_json_is_indented_for_reviewable_diffs(tmp_path):
     path = tmp_path / "run.json"
     save_json(_record(), path)

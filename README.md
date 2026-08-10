@@ -55,6 +55,12 @@ The academic side settled this years ago — paired bootstrap tests with 10,000 
 [T2-RAGBench](https://arxiv.org/html/2604.01733v1) and HetDocQA. That rigor had not reached
 the tools practitioners actually run. rag-ci is that rigor behind a CLI and a GitHub Action.
 
+To be precise about the gap: [promptfoo](https://www.promptfoo.dev/docs/guides/evaluate-rag/)
+evaluates RAG and [runs in CI](https://www.promptfoo.dev/docs/integrations/ci-cd/), and ragas
+and DeepEval both compute retrieval metrics. What none of them do is condition the build
+verdict on a significance test. They compare a score to a threshold; rag-ci compares two runs
+over the same questions and reports how confident the difference is.
+
 ## Commands
 
 Every command below works today; see [the design document](docs/design.md) for how they fit
@@ -117,10 +123,11 @@ repository.
 - **A two-condition gate.** A regression blocks the build only when it is both statistically
   significant and larger than `min-effect`. Significance alone would block on trivia;
   effect size alone would block on noise.
-- **Built for real corpora.** Stratified sampling for question generation, successive halving
-  instead of grid search, index-time and query-time parameters separated so sweeps rebuild
-  indexes as rarely as possible, and a recall-vs-pool-size curve so results measured on a
-  sub-corpus are extrapolated honestly rather than quietly overstated.
+- **Designed around large corpora.** Stratified sampling for question generation, successive
+  halving instead of grid search, and index-time and query-time parameters separated so
+  sweeps rebuild indexes as rarely as possible. Two caveats worth knowing before you scale:
+  question generation loads the sampled documents into memory, and the recall-vs-pool-size
+  curve in `ragci.poolcurve` is not yet wired into `sweep`.
 - **Agnostic by design.** No RAG framework as a dependency. You write one adapter file; your
   stack stays yours. The adapter contract captures multi-step retrieval trajectories, so
   agentic and multi-hop pipelines are first-class.
