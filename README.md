@@ -83,6 +83,7 @@ together.
 ```bash
 uvx rag-ci demo            # watch a regression get caught, in one second ✅
 uvx rag-ci init            # scaffold an adapter for your pipeline   ✅
+uvx rag-ci golden anchor   # anchor a Q/A set you already have        ✅
 uvx rag-ci golden gen      # generate candidate questions            ✅
 uvx rag-ci golden review   # accept / edit / reject, then commit     ✅
 uvx rag-ci run             # measure, with confidence intervals      ✅

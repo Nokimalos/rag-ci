@@ -236,6 +236,56 @@ def golden_gen(
     )
 
 
+@golden_app.command("anchor")
+def golden_anchor(
+    qa: Path = typer.Option(..., help="JSONL of {question, answer} pairs you already have"),
+    corpus: Path = typer.Option(..., help="Directory of .txt/.md files, or a .jsonl export"),
+    out: Path = typer.Option(Path("golden.jsonl"), help="Where to write the anchored cases"),
+    unresolved: Path = typer.Option(
+        Path("golden.unresolved.jsonl"), help="Where to write what needs a human"
+    ),
+) -> None:
+    """Anchor an existing question/answer set to passage offsets in your corpus."""
+    from ragci.anchor import anchor, load_pairs
+
+    try:
+        pairs = load_pairs(qa)
+        outcomes = anchor(pairs, load_corpus(corpus))
+    except (CorpusError, ValueError) as error:
+        console.print(f"[red]Error:[/] {escape(str(error))}")
+        raise typer.Exit(2) from error
+
+    anchored = [o.case for o in outcomes if o.case is not None]
+    save_golden(out, anchored)
+
+    stuck = [o for o in outcomes if o.case is None]
+    if stuck:
+        with unresolved.open("w", encoding="utf-8") as handle:
+            for outcome in stuck:
+                handle.write(outcome.model_dump_json(exclude_none=True) + "\n")
+
+    console.print(
+        f"Anchored [bold]{len(anchored)}[/] of {len(outcomes)} pairs to {escape(str(out))}."
+    )
+    if not stuck:
+        return
+
+    ambiguous = [o for o in stuck if o.status == "ambiguous"]
+    missing = [o for o in stuck if o.status == "not_found"]
+    console.print(
+        f"[yellow]{len(stuck)} need a human[/] — {len(ambiguous)} ambiguous, "
+        f"{len(missing)} not found — written to {escape(str(unresolved))}."
+    )
+    for outcome in stuck[:5]:
+        console.print(f"  [dim]{escape(outcome.pair.id)}:[/] {escape(outcome.note)}")
+    if len(stuck) > 5:
+        console.print(f"  [dim]...and {len(stuck) - 5} more.[/]")
+    console.print(
+        "\n[dim]Guessing an offset would teach the gate to reward the wrong retrieval, "
+        "so these are left for you rather than resolved automatically.[/]"
+    )
+
+
 @golden_app.command("review")
 def golden_review(
     candidates: Path = typer.Option(Path("golden.candidates.jsonl"), help="Candidate file"),
