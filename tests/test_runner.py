@@ -310,3 +310,98 @@ async def test_an_async_answer_is_awaited():
     )
     assert record.judged is True
     assert "faithfulness" in record.metrics
+
+
+def _flaky_cases(n: int) -> list[GoldenCase]:
+    # Distinct questions: _Flaky counts attempts per query, and identical questions would
+    # share a counter so only the first case would ever see a failure.
+    return [
+        GoldenCase(
+            id=f"q{i}",
+            question=f"Gravity is the attraction between masses. (case {i})",
+            required_passages=[
+                Passage(
+                    doc_id="physics",
+                    char_start=0,
+                    char_end=41,
+                    text="Gravity is the attraction between masses.",
+                )
+            ],
+        )
+        for i in range(n)
+    ]
+
+
+class _Flaky:
+    """Fails the first `failures` attempts on every case, then succeeds."""
+
+    def __init__(self, failures: int):
+        self.failures = failures
+        self.attempts: dict[str, int] = {}
+
+    def retrieve(self, query, index, config):
+        self.attempts[query] = self.attempts.get(query, 0) + 1
+        if self.attempts[query] <= self.failures:
+            raise TimeoutError("upstream timed out")
+        return RetrievalTrace(
+            steps=[
+                Step(
+                    query=query,
+                    chunks=[
+                        Chunk(
+                            text="Gravity is the attraction between masses.",
+                            doc_id="physics",
+                            char_start=0,
+                            char_end=41,
+                        )
+                    ],
+                )
+            ]
+        )
+
+
+async def test_without_retries_a_transient_failure_is_an_error():
+    record = await run_cases(
+        _Flaky(failures=1), _flaky_cases(4), config={}, metric_names=["recall@5"], golden_hash="h"
+    )
+    assert all(r.status == "error" for r in record.case_results)
+
+
+async def test_a_transient_failure_recovers_and_is_counted():
+    record = await run_cases(
+        _Flaky(failures=1),
+        _flaky_cases(4),
+        config={},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        retries=2,
+    )
+    assert all(r.status == "ok" for r in record.case_results)
+    assert record.valid
+    # The recovery is reported, not swallowed: a run that needed three tries per case is
+    # telling you something the metric cannot.
+    assert record.retried == 4
+    assert all(r.attempts == 2 for r in record.case_results)
+
+
+async def test_retries_are_bounded_and_a_permanent_failure_still_errors():
+    adapter = _Flaky(failures=99)
+    record = await run_cases(
+        adapter, _flaky_cases(2), config={}, metric_names=["recall@5"], golden_hash="h", retries=2
+    )
+    assert all(r.status == "error" for r in record.case_results)
+    assert all(r.attempts == 3 for r in record.case_results)  # 1 try + 2 retries, no more
+    assert not record.valid
+
+
+async def test_a_run_with_no_retries_needed_reports_none():
+    record = await run_cases(
+        _Flaky(failures=0),
+        _flaky_cases(3),
+        config={},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        retries=2,
+    )
+    assert record.retried == 0
+    assert all(r.attempts == 1 for r in record.case_results)

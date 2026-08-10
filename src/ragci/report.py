@@ -50,6 +50,11 @@ def render_console(record: RunRecord, console: Console | None = None) -> None:
             "[yellow]Warning:[/] degraded matching — the adapter returned chunks without "
             "character offsets, so coverage fell back to token overlap."
         )
+    if record.retried:
+        console.print(
+            f"[yellow]Note:[/] {record.retried} of {len(record.case_results)} cases needed "
+            "more than one attempt. The scores are real, but the pipeline is flaky."
+        )
 
 
 def save_json(record: RunRecord, path: Path) -> None:
@@ -106,6 +111,12 @@ def render_markdown(record: RunRecord, decision: GateDecision | None = None) -> 
         lines += [
             "> ⚠️ Degraded matching — the adapter returned chunks without character "
             "offsets, so coverage fell back to token overlap.",
+            "",
+        ]
+    if record.retried:
+        lines += [
+            f"> ⚠️ {record.retried} of {len(record.case_results)} cases needed more than "
+            "one attempt. The scores are real, but the pipeline is flaky.",
             "",
         ]
 

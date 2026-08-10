@@ -97,6 +97,7 @@ def run(
     top_k: int = typer.Option(10, help="top_k passed to the adapter config"),
     out: Path = typer.Option(Path(".ragci/run.json"), help="Where to write the run record"),
     concurrency: int = typer.Option(8, help="Concurrent cases"),
+    retries: int = typer.Option(0, help="Retry a failing case this many times before giving up"),
     judge: bool = typer.Option(False, "--judge", help="Also score answers with an LLM judge"),
     judge_model: str = typer.Option(JUDGE_MODEL, help="Model used for judging"),
 ) -> None:
@@ -126,6 +127,7 @@ def run(
             metric_names=metric_names,
             golden_hash=golden_hash(golden),
             concurrency=concurrency,
+            retries=retries,
             judge=judge_instance,
         )
     )
