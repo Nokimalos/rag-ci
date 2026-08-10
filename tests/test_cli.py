@@ -114,6 +114,24 @@ def test_run_exits_nonzero_when_the_adapter_always_fails(tmp_path):
     assert "INVALID" in _out(result)
 
 
+def test_run_rejects_a_nonpositive_max_cost(tmp_path):
+    adapter_path, golden_path = _write_workspace(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--adapter",
+            str(adapter_path),
+            "--golden",
+            str(golden_path),
+            "--max-cost",
+            "0",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "greater than zero" in _out(result)
+
+
 def test_run_fails_clearly_when_the_module_has_no_adapter(tmp_path):
     _, golden_path = _write_workspace(tmp_path)
     plain = tmp_path / "plain.py"
@@ -135,7 +153,9 @@ def test_run_uses_the_adapter_declared_primary_metric_by_default(tmp_path):
 GATE_METRIC = "recall@10"
 
 
-def _gate_record(offset: float, *, golden_hash: str = "h", valid: bool = True) -> RunRecord:
+def _gate_record(
+    offset: float, *, golden_hash: str = "h", valid: bool = True, complete: bool = True
+) -> RunRecord:
     scores = {f"q{i}": min(1.0, (i % 10) / 10 + offset) for i in range(120)}
     return RunRecord(
         golden_hash=golden_hash,
@@ -151,6 +171,7 @@ def _gate_record(offset: float, *, golden_hash: str = "h", valid: bool = True) -
             for cid, s in scores.items()
         ],
         valid=valid,
+        complete=complete,
     )
 
 
@@ -212,6 +233,20 @@ def test_update_baseline_overwrites_and_does_not_judge(tmp_path):
     )
     assert result.exit_code == 0
     assert baseline.read_text() == run.read_text()
+
+
+def test_update_baseline_refuses_an_incomplete_run(tmp_path):
+    baseline, run = tmp_path / "baseline.json", tmp_path / "run.json"
+    save_json(_gate_record(0.3), baseline)
+    before = baseline.read_text()
+    save_json(_gate_record(0.0, complete=False), run)
+    result = runner.invoke(
+        app,
+        ["gate", "--run", str(run), "--baseline", str(baseline), "--update-baseline"],
+    )
+    assert result.exit_code == 2
+    assert baseline.read_text() == before
+    assert "incomplete" in _out(result).lower()
 
 
 def test_min_effect_can_be_tightened_to_block_a_small_drop(tmp_path):

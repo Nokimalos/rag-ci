@@ -50,6 +50,9 @@ class RunRecord(BaseModel):
     case_results: list[CaseResult] = Field(default_factory=list)
     error_rate: float = 0.0
     valid: bool = True
+    # False means the run stopped early by policy (for example, a cost budget).
+    # This is distinct from `valid`: the pipeline may be healthy while the sample is incomplete.
+    complete: bool = True
     degraded_matching: bool = False
     judged: bool = False
     # Cost and token counts are deterministic, so unlike timings they stay in the diff.
@@ -131,19 +134,50 @@ async def run_cases(
     seed: int = 0,
     judge: Judge | None = None,
     retries: int = 0,
+    max_cost: float | None = None,
 ) -> RunRecord:
     cases = list(cases)
     if not cases:
         raise ValueError("cannot run with no cases in the golden set")
+    if max_cost is not None and max_cost <= 0:
+        raise ValueError("max_cost must be greater than zero")
 
     semaphore = asyncio.Semaphore(concurrency)
-    results = await asyncio.gather(
-        *(_run_one(adapter, case, index, config, semaphore, retries) for case in cases)
-    )
+    complete = True
+    total_known_cost = 0.0
+    case_costs: dict[str, float] = {}
 
+    if max_cost is None:
+        results = await asyncio.gather(
+            *(_run_one(adapter, case, index, config, semaphore, retries) for case in cases)
+        )
+    else:
+        # Cost is only known after an adapter call returns. Launching the full set
+        # concurrently would allow every in-flight call to overshoot the budget, so a
+        # budgeted run intentionally serializes paid work. The one unavoidable overshoot
+        # is the call that first reports a total at or above the limit.
+        results = []
+        for position, case in enumerate(cases):
+            result = await _run_one(adapter, case, index, config, semaphore, retries)
+            results.append(result)
+            if result.trace is not None and result.trace.cost_usd is not None:
+                cost = result.trace.cost_usd
+                case_costs[result.case_id] = case_costs.get(result.case_id, 0.0) + cost
+                total_known_cost += cost
+            if total_known_cost >= max_cost and position + 1 < len(cases):
+                complete = False
+                break
+
+    if max_cost is None:
+        for result in results:
+            if result.trace is not None and result.trace.cost_usd is not None:
+                case_costs[result.case_id] = result.trace.cost_usd
+                total_known_cost += result.trace.cost_usd
+
+    evaluated_cases = cases[: len(results)]
     degraded = False
     per_metric: dict[str, list[float]] = {name: [] for name in metric_names}
-    for case, result in zip(cases, results, strict=True):
+    for case, result in zip(evaluated_cases, results, strict=True):
         if result.status != "ok" or result.trace is None:
             continue
         for chunk in result.trace.all_chunks:
@@ -158,33 +192,49 @@ async def run_cases(
 
     judged = False
     if judge is not None and hasattr(adapter, "answer"):
-        for case, result in zip(cases, results, strict=True):
-            if result.status != "ok" or result.trace is None:
-                continue
+        eligible = [
+            (case, result)
+            for case, result in zip(evaluated_cases, results, strict=True)
+            if result.status == "ok" and result.trace is not None
+        ]
+        for position, (case, result) in enumerate(eligible):
+            if max_cost is not None and total_known_cost >= max_cost:
+                complete = False
+                break
             try:
                 answer = await _call(adapter.answer, case.question, result.trace, config)
+                if answer.cost_usd is not None:
+                    case_costs[result.case_id] = (
+                        case_costs.get(result.case_id, 0.0) + answer.cost_usd
+                    )
+                    total_known_cost += answer.cost_usd
                 verdict = judge.assess(case.question, answer, result.trace.all_chunks)
             except Exception:  # noqa: BLE001 - a judge outage is not a retrieval failure
                 verdict = None
-            if verdict is None:
-                continue
-            judged = True
-            result.verdict = verdict
-            if verdict.faithfulness is not None:
-                result.scores["faithfulness"] = verdict.faithfulness
-                per_metric.setdefault("faithfulness", []).append(verdict.faithfulness)
-            accuracy = citation_accuracy(answer, verdict, result.trace.all_chunks)
-            if accuracy is not None:
-                result.scores["citation_accuracy"] = accuracy
-                per_metric.setdefault("citation_accuracy", []).append(accuracy)
+            if verdict is not None:
+                judged = True
+                result.verdict = verdict
+                if verdict.faithfulness is not None:
+                    result.scores["faithfulness"] = verdict.faithfulness
+                    per_metric.setdefault("faithfulness", []).append(verdict.faithfulness)
+                accuracy = citation_accuracy(answer, verdict, result.trace.all_chunks)
+                if accuracy is not None:
+                    result.scores["citation_accuracy"] = accuracy
+                    per_metric.setdefault("citation_accuracy", []).append(accuracy)
+            if (
+                max_cost is not None
+                and total_known_cost >= max_cost
+                and position + 1 < len(eligible)
+            ):
+                complete = False
+                break
 
     errors = sum(result.status == "error" for result in results)
-    error_rate = errors / len(cases)
+    error_rate = errors / len(results) if results else 0.0
 
     traces = [result.trace for result in results if result.trace is not None]
     latencies = [trace.latency_ms for trace in traces] or [0.0]
 
-    costs = [trace.cost_usd for trace in traces if trace.cost_usd is not None]
     token_counts = [
         trace.tokens.input_tokens + trace.tokens.output_tokens
         for trace in traces
@@ -202,9 +252,10 @@ async def run_cases(
         error_rate=error_rate,
         # Above the threshold the run says nothing about quality — it says the plumbing broke.
         valid=error_rate <= MAX_ERROR_RATE,
+        complete=complete,
         degraded_matching=degraded,
         judged=judged,
-        cost_usd_per_query=float(np.mean(costs)) if costs else None,
+        cost_usd_per_query=(float(np.mean(list(case_costs.values()))) if case_costs else None),
         tokens_per_query=float(np.mean(token_counts)) if token_counts else None,
         timings=Timings(
             latency_ms_p50=float(np.percentile(latencies, 50)),

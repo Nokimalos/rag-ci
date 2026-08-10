@@ -7,7 +7,9 @@ from ragci.stats import MetricSummary
 METRIC = "recall@10"
 
 
-def _record(scores: dict[str, float], *, golden_hash: str = "h", valid: bool = True) -> RunRecord:
+def _record(
+    scores: dict[str, float], *, golden_hash: str = "h", valid: bool = True, complete: bool = True
+) -> RunRecord:
     """Build a record whose per-case scores are exactly `scores`."""
     values = list(scores.values())
     return RunRecord(
@@ -27,6 +29,7 @@ def _record(scores: dict[str, float], *, golden_hash: str = "h", valid: bool = T
             for case_id, score in scores.items()
         ],
         valid=valid,
+        complete=complete,
     )
 
 
@@ -44,6 +47,16 @@ def test_an_invalid_run_cannot_be_compared():
     decision = decide(_record(_spread(0.0)), _record(_spread(0.0), valid=False))
     assert decision.passed is False
     assert decision.reason == "invalid_run"
+
+
+def test_an_incomplete_run_cannot_be_compared_or_establish_a_baseline():
+    candidate = _record(_spread(0.0), complete=False)
+    with_baseline = decide(_record(_spread(0.0)), candidate)
+    without_baseline = decide(None, candidate)
+    assert with_baseline.passed is False
+    assert with_baseline.reason == "incomplete_run"
+    assert without_baseline.passed is False
+    assert without_baseline.reason == "incomplete_run"
 
 
 def test_a_changed_golden_set_invalidates_the_baseline():

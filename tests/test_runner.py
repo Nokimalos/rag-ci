@@ -174,6 +174,113 @@ async def test_cost_and_tokens_are_none_when_the_adapter_reports_nothing():
     assert record.tokens_per_query is None
 
 
+async def test_max_cost_stops_before_launching_another_paid_case():
+    class Metered:
+        def __init__(self):
+            self.calls = 0
+
+        def retrieve(self, query, index, config):
+            self.calls += 1
+            trace = ReferenceRag().retrieve(query, index, config)
+            trace.cost_usd = 0.6
+            return trace
+
+    cases = CASES + [_case("q3", "physics", 0, 45, "Gravity is the attraction between masses")]
+    adapter = Metered()
+    record = await run_cases(
+        adapter,
+        cases,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        max_cost=1.0,
+        concurrency=8,
+    )
+    assert adapter.calls == 2
+    assert len(record.case_results) == 2
+    assert record.complete is False
+    assert record.valid is True
+    assert record.cost_usd_per_query == pytest.approx(0.6)
+
+
+async def test_max_cost_is_a_noop_when_the_adapter_reports_no_cost():
+    record = await run_cases(
+        ReferenceRag(),
+        CASES,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        max_cost=0.001,
+    )
+    assert len(record.case_results) == len(CASES)
+    assert record.complete is True
+
+
+async def test_answer_cost_is_included_in_unbudgeted_per_query_cost():
+    from ragci.contract import Answer
+    from tests.fakes import AnsweringRag, FakeJudge
+
+    class Metered(AnsweringRag):
+        def retrieve(self, query, index, config):
+            trace = super().retrieve(query, index, config)
+            trace.cost_usd = 0.2
+            return trace
+
+        def answer(self, query, trace, config):
+            base = super().answer(query, trace, config)
+            return Answer(
+                text=base.text,
+                cited_chunks=base.cited_chunks,
+                latency_ms=base.latency_ms,
+                cost_usd=0.3,
+            )
+
+    record = await run_cases(
+        Metered(),
+        CASES,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(),
+    )
+    assert record.cost_usd_per_query == pytest.approx(0.5)
+
+
+async def test_max_cost_counts_answer_cost_and_stops_before_the_next_answer():
+    from ragci.contract import Answer
+    from tests.fakes import AnsweringRag, FakeJudge
+
+    class MeteredAnswers(AnsweringRag):
+        def __init__(self):
+            super().__init__()
+            self.answer_calls = 0
+
+        def answer(self, query, trace, config):
+            self.answer_calls += 1
+            base = super().answer(query, trace, config)
+            return Answer(
+                text=base.text,
+                cited_chunks=base.cited_chunks,
+                latency_ms=base.latency_ms,
+                cost_usd=0.6,
+            )
+
+    cases = CASES + [_case("q3", "physics", 0, 45, "Gravity is the attraction between masses")]
+    adapter = MeteredAnswers()
+    record = await run_cases(
+        adapter,
+        cases,
+        config={"top_k": 5},
+        metric_names=["recall@5"],
+        golden_hash="h",
+        judge=FakeJudge(),
+        max_cost=1.0,
+    )
+    assert adapter.answer_calls == 2
+    assert record.complete is False
+    assert record.cost_usd_per_query == pytest.approx(0.6)
+
+
 async def test_an_empty_golden_set_is_rejected():
     with pytest.raises(ValueError, match="no cases"):
         await run_cases(ReferenceRag(), [], config={}, metric_names=["recall@5"], golden_hash="h")
