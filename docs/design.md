@@ -6,7 +6,13 @@ can be argued with rather than rediscovered.
 
 This document tracks intent, not progress. See the README for what actually ships today.
 
-*Last revised 2026-08-09.*
+**Designed but not implemented as of 0.4.2** — listed here so nothing below reads as a
+feature list: a content-addressed disk cache, two-stage evaluation on large corpora,
+retries, `--max-cost`, gating on latency, Holm-Bonferroni correction wired into `sweep`
+(the function exists in `ragci.stats` and is unit-tested, but nothing calls it), and
+`ragci.poolcurve` wired into `sweep` (importable and tested, but standalone).
+
+*Last revised 2026-08-10.*
 
 ---
 

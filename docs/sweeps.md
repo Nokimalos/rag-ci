@@ -7,6 +7,14 @@ uvx rag-ci sweep --metric recall@10
 The sweep searches the parameter grid your adapter declares and reports which
 configuration wins — without evaluating every combination against every case.
 
+> **The sweep ranks mean scores. It does not run a significance test.** Unlike `gate`,
+> which blocks only on a statistically significant regression, `sweep` compares raw means
+> and returns the highest. The winner may be ahead by noise, and the report says so when
+> the elimination cut was arbitrary — but it does not attach a confidence interval or a
+> p-value to the ranking. Treat the winner as a candidate to confirm with `run` and `gate`,
+> not as a proven improvement. Correcting the ranking for multiple comparisons is designed
+> (`ragci.stats.holm_bonferroni` exists and is tested) but not yet wired in.
+
 ## What successive halving buys, and what it costs
 
 Every configuration runs against a small sample of cases. The worst two thirds are
@@ -95,6 +103,10 @@ sub-corpus, then validate the finalists at full scale.
 
 The catch is that a sub-corpus **overstates** recall: fewer distractors, easier retrieval.
 Reporting that number as if it were the real one is the dishonest option.
+
+**`ragci.poolcurve` is a standalone module, not part of `sweep`.** Import and call it
+yourself; `rag-ci sweep` does not extrapolate, and reports only what it measured. Wiring
+the two together is designed but unimplemented.
 
 `ragci.poolcurve` measures the metric at increasing pool sizes and fits recall against
 `log10(pool size)`, which is roughly how retrieval degrades as distractors accumulate. It

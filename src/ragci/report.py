@@ -30,10 +30,11 @@ def render_console(record: RunRecord, console: Console | None = None) -> None:
         )
     console.print(table)
 
-    console.print(
-        f"latency p50 {record.timings.latency_ms_p50:.0f} ms  "
-        f"p95 {record.timings.latency_ms_p95:.0f} ms"
-    )
+    if record.timings.latency_ms_p50 is not None:
+        console.print(
+            f"latency p50 {record.timings.latency_ms_p50:.0f} ms  "
+            f"p95 {record.timings.latency_ms_p95:.0f} ms"
+        )
     if record.cost_usd_per_query is not None:
         console.print(f"cost {record.cost_usd_per_query:.4f} USD per query")
     if record.tokens_per_query is not None:
@@ -85,10 +86,12 @@ def render_markdown(record: RunRecord, decision: GateDecision | None = None) -> 
         )
     lines.append("")
 
-    lines.append(
-        f"latency p50 {record.timings.latency_ms_p50:.0f} ms · "
-        f"p95 {record.timings.latency_ms_p95:.0f} ms"
-    )
+    # Absent whenever the record was reloaded from disk — see Timings.
+    if record.timings.latency_ms_p50 is not None:
+        lines.append(
+            f"latency p50 {record.timings.latency_ms_p50:.0f} ms · "
+            f"p95 {record.timings.latency_ms_p95:.0f} ms"
+        )
     if record.cost_usd_per_query is not None:
         lines.append(f"cost {record.cost_usd_per_query:.4f} USD per query")
     lines.append("")

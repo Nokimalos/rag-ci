@@ -98,7 +98,13 @@ def _render(chunks: list[Chunk]) -> str:
 
 
 class AnthropicJudge:
-    """Assesses grounding with a single temperature-0 call per case."""
+    """Assesses grounding with a single call per case, at the model's default sampling.
+
+    `temperature` is deliberately not passed: it is rejected with a 400 on claude-opus-5
+    and the rest of the Claude 5 family, so there is no determinism knob to turn here.
+    Judge variance is handled downstream instead — `calibrate` measures it by permuting
+    passage order, and the paired bootstrap absorbs what remains.
+    """
 
     def __init__(self, model: str = DEFAULT_MODEL, client=None):
         if client is None and not _anthropic_available():
