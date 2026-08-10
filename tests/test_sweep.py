@@ -92,8 +92,20 @@ def test_query_only_sweeps_never_rebuild_more_than_once():
 
 def test_rungs_shrink_configurations_and_grow_cases():
     rungs = plan_rungs(9, 90, eta=3)
-    assert [r.n_configs for r in rungs] == [9, 3, 1]
+    # The final rung holds two, not one. A lone survivor has nothing to be compared
+    # against, and a winner nobody ran against cannot be shown to have won.
+    assert [r.n_configs for r in rungs] == [9, 3, 2]
     assert [r.n_cases for r in rungs] == [10, 30, 90]
+
+
+def test_two_configurations_reach_the_final_rung_even_from_a_wide_grid():
+    assert plan_rungs(81, 810, eta=3)[-1].n_configs == 2
+    assert plan_rungs(2, 90, eta=3)[-1].n_configs == 2
+
+
+def test_a_single_configuration_gets_a_single_rung():
+    rungs = plan_rungs(1, 90, eta=3)
+    assert [(r.n_configs, r.n_cases) for r in rungs] == [(1, 90)]
 
 
 def test_the_last_rung_uses_every_case():
@@ -112,13 +124,17 @@ def test_rungs_never_go_below_the_minimum_case_count():
 
 def test_the_best_configuration_wins():
     configs = [{"k": i} for i in range(9)]
-    outcome = successive_halving(configs, lambda config, n: config["k"] / 10, n_cases=90, eta=3)
+    outcome = successive_halving(
+        configs, lambda config, n: [config["k"] / 10] * n, n_cases=90, eta=3
+    )
     assert outcome.winner == {"k": 8}
 
 
 def test_halving_costs_less_than_the_full_grid():
     configs = [{"k": i} for i in range(9)]
-    outcome = successive_halving(configs, lambda config, n: config["k"] / 10, n_cases=90, eta=3)
+    outcome = successive_halving(
+        configs, lambda config, n: [config["k"] / 10] * n, n_cases=90, eta=3
+    )
     # Full grid would be 9 configs x 90 cases = 810 case-evaluations.
     assert outcome.full_grid_cost == 810
     assert sum(e.n_cases for e in outcome.evaluations) < outcome.full_grid_cost
@@ -126,13 +142,15 @@ def test_halving_costs_less_than_the_full_grid():
 
 def test_every_configuration_is_evaluated_at_least_once():
     configs = [{"k": i} for i in range(9)]
-    outcome = successive_halving(configs, lambda config, n: 0.5, n_cases=90)
+    outcome = successive_halving(configs, lambda config, n: [0.5] * n, n_cases=90)
     assert {repr(e.config) for e in outcome.evaluations} >= {repr(c) for c in configs}
 
 
 def test_an_eliminated_configuration_is_not_evaluated_again():
     configs = [{"k": i} for i in range(9)]
-    outcome = successive_halving(configs, lambda config, n: config["k"] / 10, n_cases=90, eta=3)
+    outcome = successive_halving(
+        configs, lambda config, n: [config["k"] / 10] * n, n_cases=90, eta=3
+    )
     # The worst configuration appears only in rung 0.
     worst = [e for e in outcome.evaluations if e.config == {"k": 0}]
     assert [e.rung for e in worst] == [0]
@@ -143,7 +161,7 @@ def test_the_evaluator_receives_the_rung_case_count():
 
     def evaluate(config, n_cases):
         seen.append(n_cases)
-        return 0.5
+        return [0.5] * n_cases
 
     successive_halving([{"k": i} for i in range(9)], evaluate, n_cases=90, eta=3)
     assert set(seen) == {10, 30, 90}
@@ -151,14 +169,14 @@ def test_the_evaluator_receives_the_rung_case_count():
 
 def test_a_tie_resolves_deterministically():
     configs = [{"k": i} for i in range(9)]
-    first = successive_halving(configs, lambda config, n: 0.5, n_cases=90)
-    second = successive_halving(configs, lambda config, n: 0.5, n_cases=90)
+    first = successive_halving(configs, lambda config, n: [0.5] * n, n_cases=90)
+    second = successive_halving(configs, lambda config, n: [0.5] * n, n_cases=90)
     assert first.winner == second.winner
 
 
 def test_an_empty_grid_is_rejected():
     with pytest.raises(ValueError, match="no configurations"):
-        successive_halving([], lambda config, n: 0.0, n_cases=10)
+        successive_halving([], lambda config, n: [0.0] * n, n_cases=10)
 
 
 def _cases(n: int = 12) -> list[GoldenCase]:
@@ -255,21 +273,25 @@ async def test_sweeping_with_no_cases_is_rejected():
 def test_the_outcome_records_the_grid_size_directly():
     # Deriving it from full_grid_cost / n_cases breaks the moment a rung uses a
     # different case count than the divisor assumes.
-    outcome = successive_halving([{"k": i} for i in range(9)], lambda config, n: 0.5, n_cases=90)
+    outcome = successive_halving(
+        [{"k": i} for i in range(9)], lambda config, n: [0.5] * n, n_cases=90
+    )
     assert outcome.n_configs == 9
 
 
 def test_a_tied_first_rung_is_reported_as_arbitrary():
     # Every configuration scoring the same means the cut was settled by the tie-break,
     # not by evidence. Presenting a "winner" from that is presenting a coin toss.
-    outcome = successive_halving([{"k": i} for i in range(9)], lambda config, n: 1.0, n_cases=90)
+    outcome = successive_halving(
+        [{"k": i} for i in range(9)], lambda config, n: [1.0] * n, n_cases=90
+    )
     assert outcome.arbitrary_elimination is True
     assert outcome.decisive is False
 
 
 def test_a_clear_ranking_is_not_arbitrary():
     outcome = successive_halving(
-        [{"k": i} for i in range(9)], lambda config, n: config["k"] / 10, n_cases=90
+        [{"k": i} for i in range(9)], lambda config, n: [config["k"] / 10] * n, n_cases=90
     )
     assert outcome.arbitrary_elimination is False
     assert outcome.decisive is True
@@ -280,7 +302,7 @@ def test_a_tie_away_from_the_cut_is_not_arbitrary():
     # be distinct, though — three tied finalists means the *final* pick is a coin toss.
     scores = {0: 0.9, 1: 0.8, 2: 0.7, 3: 0.1, 4: 0.1, 5: 0.1, 6: 0.1, 7: 0.1, 8: 0.1}
     outcome = successive_halving(
-        [{"k": i} for i in range(9)], lambda config, n: scores[config["k"]], n_cases=90
+        [{"k": i} for i in range(9)], lambda config, n: [scores[config["k"]]] * n, n_cases=90
     )
     assert outcome.arbitrary_elimination is False
 
@@ -306,3 +328,97 @@ async def test_an_async_build_index_is_awaited():
     )
     assert adapter.builds > 0
     assert set(outcome.winner) <= {"chunk_size", "top_k"}
+
+
+# --- The winner has to beat the field, not just top the column -----------------------
+
+
+def _split(wins: int, losses: int, *, winner: bool) -> list[float]:
+    """Scores for a configuration that takes `wins` cases and drops `losses`.
+
+    Explicit lists rather than a smooth offset: the paired bootstrap resamples per-case
+    differences, so a difference that never changes sign is degenerate — it has zero
+    variance and clears any threshold, however small the effect.
+    """
+    return [1.0] * wins + [0.0] * losses if winner else [0.0] * wins + [1.0] * losses
+
+
+def _finalists(wins: int, losses: int):
+    n = wins + losses
+    scores = {0: _split(wins, losses, winner=True), 1: _split(wins, losses, winner=False)}
+    return successive_halving([{"k": 0}, {"k": 1}], lambda c, _: scores[c["k"]], n_cases=n)
+
+
+def test_a_clear_winner_is_significant_against_the_runner_up():
+    outcome = _finalists(wins=36, losses=4)  # 0.90 against 0.10
+    assert outcome.winner == {"k": 0}
+    assert len(outcome.comparisons) == 1
+
+    comparison = outcome.comparisons[0]
+    assert comparison.against == {"k": 1}
+    assert comparison.advantage == pytest.approx(0.8)
+    assert comparison.ci_low > 0  # the interval clears zero
+    assert comparison.significant is True
+    assert outcome.winner_is_significant is True
+    assert outcome.decisive is True
+
+
+def test_configurations_that_only_differ_by_noise_produce_no_winner():
+    # The failure this whole feature exists to prevent. 21 wins against 19 losses is a
+    # 0.05 lead that a coin could have produced; ranking alone calls it a result.
+    outcome = _finalists(wins=21, losses=19)
+    assert outcome.comparisons[0].advantage == pytest.approx(0.05)
+    assert outcome.comparisons[0].significant is False
+    assert outcome.winner_is_significant is False
+    assert outcome.decisive is False
+    assert outcome.contenders == outcome.comparisons
+
+
+def test_the_advantage_is_reported_from_the_winners_side():
+    # paired_bootstrap_test measures the runner-up's deficit, so the sign is flipped on
+    # the way out. Getting that wrong reports every winner as losing by what it won by.
+    comparison = _finalists(wins=30, losses=10).comparisons[0]
+    assert comparison.advantage > 0
+    assert comparison.ci_low <= comparison.advantage <= comparison.ci_high
+
+
+def test_a_lone_configuration_has_nothing_to_compare_against():
+    outcome = successive_halving([{"k": 0}], lambda c, n: [0.8] * n, n_cases=60)
+    assert outcome.comparisons == []
+    assert outcome.winner_is_significant is False
+    # ...but it is still the answer to "which of these should I use", so not a failure.
+    assert outcome.decisive is True
+
+
+def test_the_correction_never_admits_more_than_the_raw_comparison():
+    from ragci.sweep import compare_finalists
+
+    winner = _split(28, 12, winner=True)
+    others = [
+        ({"k": 1}, _split(28, 12, winner=False)),  # a wide margin
+        ({"k": 2}, _split(23, 17, winner=False)),  # a modest one
+        ({"k": 3}, _split(21, 19, winner=False)),  # noise
+    ]
+
+    corrected = compare_finalists(winner, others, alpha=0.05)
+    assert len(corrected) == 3
+    # Holm is a step-down procedure: it can only ever be stricter than comparing each
+    # p-value to alpha on its own, never looser.
+    assert all(c.p_value <= 0.05 or not c.significant for c in corrected)
+    assert corrected[-1].significant is False  # noise stays noise
+
+
+def test_an_errored_case_drops_the_pair_instead_of_misaligning_the_rest():
+    # One configuration erroring on case 3 must not shift every later pair by one.
+    from ragci.sweep import compare_finalists
+
+    winner = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
+    other = [0.5, 0.5, None, 0.5, 0.5, 0.5]
+
+    assert compare_finalists(winner, [({"k": 1}, other)])[0].advantage == pytest.approx(0.4)
+
+
+def test_a_configuration_that_errored_on_every_case_is_skipped_not_crashed():
+    from ragci.sweep import compare_finalists
+
+    assert compare_finalists([0.9, 0.8], [({"k": 1}, [None, None])]) == []

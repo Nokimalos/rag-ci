@@ -112,6 +112,34 @@ def render_markdown(record: RunRecord, decision: GateDecision | None = None) -> 
     return "\n".join(lines)
 
 
+def _render_verdict(console: Console, outcome: "SweepOutcome") -> None:
+    """Whether the winner actually beat the field, under the table that ranked it."""
+    if not outcome.comparisons:
+        return
+
+    contenders = outcome.contenders
+    if not contenders:
+        worst = max(c.p_value for c in outcome.comparisons)
+        console.print(
+            f"[green]Winner confirmed:[/] ahead of all {len(outcome.comparisons)} "
+            f"finalist(s), p ≤ {worst:.4f} after Holm-Bonferroni."
+        )
+        return
+
+    console.print(
+        "[yellow]No clear winner:[/] the top configuration is not statistically "
+        "separable from the rest of the final rung. Picking it over these is a "
+        "preference, not a measured improvement."
+    )
+    for comparison in contenders:
+        params = ", ".join(f"{k}={v}" for k, v in sorted(comparison.against.items())) or "default"
+        console.print(
+            f"  [dim]vs[/] {params}: {comparison.advantage:+.3f} "
+            f"(95% CI [{comparison.ci_low:.3f}, {comparison.ci_high:.3f}], "
+            f"p={comparison.p_value:.4f})"
+        )
+
+
 def render_sweep(outcome: "SweepOutcome", console: Console | None = None) -> None:
     """Ranked configurations, with the cost of the search stated rather than implied."""
     console = console or Console()
@@ -147,6 +175,8 @@ def render_sweep(outcome: "SweepOutcome", console: Console | None = None) -> Non
             "survivors, so the cut was decided by tie-break rather than by evidence. "
             "This winner is a draw, not a result — add cases and sweep again."
         )
+
+    _render_verdict(console, outcome)
 
     spent = sum(e.n_cases for e in outcome.evaluations)
     saved = 100 * (1 - spent / outcome.full_grid_cost) if outcome.full_grid_cost else 0
