@@ -25,6 +25,9 @@ class CaseResult(BaseModel):
     trace: RetrievalTrace | None = None
     scores: dict[str, float] = Field(default_factory=dict)
     verdict: Verdict | None = None
+    # How many attempts this case needed. Above 1 means something is flaky, which the
+    # report says out loud rather than hiding behind a result that eventually worked.
+    attempts: int = 1
 
 
 class Timings(BaseModel):
@@ -54,6 +57,16 @@ class RunRecord(BaseModel):
     tokens_per_query: float | None = None
     timings: Timings = Field(default_factory=Timings)
 
+    @property
+    def retried(self) -> int:
+        """Cases that needed more than one attempt.
+
+        Surfaced rather than swallowed: retries turn a flaky pipeline into a passing run,
+        and a passing run that took three attempts per case is telling you something the
+        metric cannot.
+        """
+        return sum(1 for result in self.case_results if result.attempts > 1)
+
 
 async def _call(func, *args):
     """Call an adapter method whether it is sync or async.
@@ -69,13 +82,41 @@ async def _call(func, *args):
     return await asyncio.to_thread(func, *args)
 
 
-async def _run_one(adapter, case: GoldenCase, index, config, semaphore) -> CaseResult:
+RETRY_BACKOFF_SECONDS = 0.5
+
+
+async def _run_one(
+    adapter, case: GoldenCase, index, config, semaphore, retries: int = 0
+) -> CaseResult:
+    """Retrieve one case, retrying transient failures.
+
+    A long sweep against a network-backed retriever will hit the occasional timeout, and
+    without retries a handful of those pushes the run past its 5% error threshold and
+    invalidates work that had nothing wrong with it.
+
+    Every exception is retried, because an adapter can raise anything and guessing which
+    failures are transient would be guessing. A deterministic failure therefore costs
+    `retries` extra attempts before it is reported — bounded, and the price of not
+    discarding a good run over a blip.
+    """
     async with semaphore:
-        try:
-            trace = await _call(adapter.retrieve, case.question, index, config)
-        except Exception as exc:  # noqa: BLE001 - any adapter failure is a case error
-            return CaseResult(case_id=case.id, status="error", error=f"{type(exc).__name__}: {exc}")
-        return CaseResult(case_id=case.id, status="ok", trace=trace)
+        last: Exception | None = None
+        for attempt in range(1, retries + 2):
+            try:
+                trace = await _call(adapter.retrieve, case.question, index, config)
+            except Exception as exc:  # noqa: BLE001 - any adapter failure is a case error
+                last = exc
+                if attempt <= retries:
+                    await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+                continue
+            return CaseResult(case_id=case.id, status="ok", trace=trace, attempts=attempt)
+
+        return CaseResult(
+            case_id=case.id,
+            status="error",
+            error=f"{type(last).__name__}: {last}",
+            attempts=retries + 1,
+        )
 
 
 async def run_cases(
@@ -89,6 +130,7 @@ async def run_cases(
     concurrency: int = 8,
     seed: int = 0,
     judge: Judge | None = None,
+    retries: int = 0,
 ) -> RunRecord:
     cases = list(cases)
     if not cases:
@@ -96,7 +138,7 @@ async def run_cases(
 
     semaphore = asyncio.Semaphore(concurrency)
     results = await asyncio.gather(
-        *(_run_one(adapter, case, index, config, semaphore) for case in cases)
+        *(_run_one(adapter, case, index, config, semaphore, retries) for case in cases)
     )
 
     degraded = False

@@ -59,6 +59,28 @@ Without a baseline the action still runs and reports numbers — it just cannot 
 Code `2` is deliberately distinct from `1`. "The pipeline got worse" and "I could not tell"
 are different problems, and a stale baseline is not a quality signal.
 
+## Flaky pipelines
+
+A run where more than 5% of cases error is marked invalid and the gate exits `2` rather
+than reporting a verdict it cannot justify. On a long run against a network-backed
+retriever, a handful of timeouts can cross that line for reasons that have nothing to do
+with retrieval quality.
+
+`rag-ci run --retries 2` retries a failing case before giving up. Every exception is
+retried — an adapter can raise anything, and guessing which failures are transient would
+be guessing — so a genuinely broken case costs two extra attempts before it is reported.
+
+**Recovery is reported, not hidden.** A run where cases needed more than one attempt says
+so, in the console and in the pull request comment:
+
+```
+Note: 7 of 150 cases needed more than one attempt. The scores are real, but the
+pipeline is flaky.
+```
+
+Retries exist so a blip does not discard good work. They are not there to make an unstable
+pipeline look stable, which is why the count is on the report rather than in a log.
+
 ## Why `min-effect` exists
 
 The gate requires two things at once: statistical significance **and** a drop larger than
