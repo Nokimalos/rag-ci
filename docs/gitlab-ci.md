@@ -11,7 +11,7 @@ rag-ci:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   variables:
-    RAGCI_VERSION: "0.5.0"
+    RAGCI_VERSION: "0.6.0"
   # 1 = real regression, blocks the pipeline. 2 = comparison not trustworthy, warns.
   allow_failure:
     exit_codes: 2
@@ -85,7 +85,7 @@ project directory, so point uv's cache there:
 
 ```yaml
   variables:
-    RAGCI_VERSION: "0.5.0"
+    RAGCI_VERSION: "0.6.0"
     UV_CACHE_DIR: .uv-cache
   cache:
     key:
