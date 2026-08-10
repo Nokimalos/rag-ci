@@ -4,7 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from ragci.cli import app
-from ragci.golden import GoldenCase, Passage, save_golden
+from ragci.golden import GoldenCase, Passage, load_golden, save_golden
 from ragci.report import save_json
 from ragci.runner import CaseResult, RunRecord
 from ragci.stats import MetricSummary
@@ -514,3 +514,59 @@ def test_judge_calibrate_fails_an_unstable_judge(tmp_path, monkeypatch):
     )
     assert result.exit_code != 0
     assert "not trustworthy" in _out(result).lower()
+
+
+def _anchor_fixture(tmp_path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "physics.txt").write_text(
+        "Notes.\n\nGravity is the attraction\nbetween masses. It weakens with distance.\n"
+    )
+    qa = tmp_path / "qa.jsonl"
+    qa.write_text(
+        '{"question": "What is gravity?", '
+        '"answer": "Gravity is the attraction between masses."}\n'
+        '{"question": "Revenue?", "answer": "Revenue reached 4.2 million euros"}\n'
+    )
+    return corpus, qa
+
+
+def test_golden_anchor_writes_cases_and_leaves_the_rest_for_a_human(tmp_path):
+    corpus, qa = _anchor_fixture(tmp_path)
+    out, unresolved = tmp_path / "golden.jsonl", tmp_path / "todo.jsonl"
+
+    result = runner.invoke(
+        app,
+        [
+            "golden",
+            "anchor",
+            "--qa",
+            str(qa),
+            "--corpus",
+            str(corpus),
+            "--out",
+            str(out),
+            "--unresolved",
+            str(unresolved),
+        ],
+    )
+    assert result.exit_code == 0, _out(result)
+    assert "Anchored 1 of 2" in _out(result)
+    assert "1 need a human" in _out(result)
+
+    cases = list(load_golden(out))
+    assert len(cases) == 1
+    passage = cases[0].required_passages[0]
+    source = (corpus / "physics.txt").read_text()
+    # The offsets have to address the file itself, not a normalised copy of it.
+    assert source[passage.char_start : passage.char_end] == passage.text
+    assert unresolved.exists()
+
+
+def test_golden_anchor_rejects_a_missing_corpus(tmp_path):
+    _, qa = _anchor_fixture(tmp_path)
+    result = runner.invoke(
+        app, ["golden", "anchor", "--qa", str(qa), "--corpus", str(tmp_path / "nope")]
+    )
+    assert result.exit_code == 2
+    assert "does not exist" in _out(result)

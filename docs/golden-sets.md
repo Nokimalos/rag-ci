@@ -32,6 +32,36 @@ A golden case does not say "the answer is in chunk 47". It says "the answer is i
 `chunk_size`; document offsets do not. This is what lets you compare two chunking
 strategies against the same golden set at all — see [the design document](design.md).
 
+## Already have a question/answer set?
+
+`golden gen` builds one from scratch and needs an API key. If you already have questions
+and their answers — most teams do — anchor those instead:
+
+```bash
+uvx rag-ci golden anchor --qa existing.jsonl --corpus ./docs
+```
+
+Input is one `{"question": ..., "answer": ...}` per line (`id` optional). Each answer is
+located in the corpus and written out with the character offsets it occupies. Matching
+tolerates the reflowed whitespace and casing a copy-paste picks up, while the offsets it
+reports address the document exactly as stored.
+
+**It refuses to guess.** Three outcomes:
+
+| outcome | what happens |
+|---|---|
+| the answer appears exactly once | anchored, written to `golden.jsonl` |
+| it appears more than once | left for you, with every location listed |
+| it appears nowhere verbatim | left for you, with the closest sentences suggested |
+
+Everything unresolved goes to `golden.unresolved.jsonl` with a note saying which case it
+is. A confidently wrong offset is worse than no offset — it teaches the gate to reward
+retrieval of the wrong passage, and nothing downstream can detect that.
+
+The third case is the common one and it is not a failure: an answer that was written by a
+person, or synthesised across passages, has no single span to point at. Pick the passage
+that actually supports it, or drop the question.
+
 ## Sampling: why stratified
 
 `--sample 20` does not take 20 documents at random. It groups by `--stratify-by`
