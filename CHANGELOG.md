@@ -8,6 +8,42 @@ While the version stays below 1.0, the adapter contract may change in a minor re
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-11
+
+### Fixed
+
+- **`rag-ci run` never called `build_index`.** An adapter that declared one — which the
+  design document encourages — received `index=None` and failed with
+  `AttributeError: 'NoneType' object has no attribute 'query'`, an error pointing at the
+  adapter rather than at rag-ci. Building the index inside `retrieve()` instead hit the
+  next layer: the runner uses eight threads, so eight vector-store clients were
+  constructed at once. `run` now builds the index once, before the cases, exactly as
+  `sweep` always has. Adapters that evaluate an existing production index still omit
+  `build_index` and are unaffected.
+- The adapter template said nothing about `build_index` or about what `index` is. It now
+  does, including that a client must not be constructed inside `retrieve()`.
+
+### Added
+
+- **`rag-ci run --max-cost <USD>`** stops before starting further paid work once the spend
+  reported by your adapter reaches the budget — contributed by @averyquinnhq. A truncated
+  run is marked *incomplete*, which is distinct from *invalid*: the pipeline was healthy,
+  the sample simply is not finished. The gate refuses it and `--update-baseline` refuses
+  it, because half a golden set produces a plausible-looking score that means nothing
+  beside a full baseline. Note that a budgeted run evaluates cases one at a time — cost is
+  only known after a call returns — so it is measurably slower than an unbudgeted one.
+- **`examples/langchain-chroma/`** — the first adapter in this repository written against
+  a stack we did not design: LangChain chunking, Chroma storage, ONNX embeddings, no API
+  key. Its golden set was produced by `golden anchor` rather than by hand.
+
+### Answered
+
+- **Do character offsets survive a real vector pipeline?** Yes. LangChain's splitter
+  reports no offsets by default, but with `add_start_index=True` they pass through Chroma
+  intact, `int` type included, and rag-ci matches passages exactly rather than falling
+  back to token overlap. The friction documented since 0.4.2 is a one-flag problem, not a
+  structural one.
+
 ## [0.6.0] — 2026-08-10
 
 Everything here is additive: nothing changes for a caller who does not pass a new flag.

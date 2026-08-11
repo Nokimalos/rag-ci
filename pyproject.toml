@@ -1,6 +1,6 @@
 [project]
 name = "rag-ci"
-version = "0.6.0"
+version = "0.7.0"
 description = "Regression testing and configuration sweeps for RAG pipelines."
 readme = "README.md"
 license = { text = "MIT" }
