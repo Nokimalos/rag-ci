@@ -223,10 +223,21 @@ def render_sweep(outcome: "SweepOutcome", console: Console | None = None) -> Non
         )
 
     if outcome.arbitrary_elimination:
+        first = outcome.rungs[0].n_cases if outcome.rungs else 0
+        deepest = outcome.rungs[-1].n_cases if outcome.rungs else 0
+        # Which advice is right depends on where the tie happened. When the first rung
+        # used a fraction of the golden set, the cut lacked evidence the run already had.
+        # Telling someone to add cases when they have ten times what the rung used sends
+        # them to fix the wrong thing.
+        remedy = (
+            f"raise --min-cases above {first} so the first rung has enough to separate them"
+            if first * 2 <= deepest
+            else "add cases and sweep again"
+        )
         console.print(
             "[yellow]Warning:[/] configurations were eliminated while tied with the "
             "survivors, so the cut was decided by tie-break rather than by evidence. "
-            "This winner is a draw, not a result — add cases and sweep again."
+            f"This winner is a draw, not a result — {remedy}."
         )
 
     _render_verdict(console, outcome)

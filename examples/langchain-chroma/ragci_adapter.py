@@ -27,8 +27,14 @@ class LangChainChroma:
             chunk_overlap=40,
             add_start_index=True,  # without this, every offset below is None
         )
+        # EphemeralClient() hands back the same in-process client every time, so a second
+        # build_index for the same parameters finds its collection already there. A sweep
+        # rebuilds an index once per rung, so build_index has to be idempotent.
         client = chromadb.EphemeralClient()
-        collection = client.create_collection(f"ragci-{config.get('chunk_size', 400)}")
+        name = f"ragci-{config.get('chunk_size', 400)}"
+        if name in [c.name for c in client.list_collections()]:
+            client.delete_collection(name)
+        collection = client.create_collection(name)
 
         ids, texts, metas = [], [], []
         for path in sorted(CORPUS.glob("*.txt")):
@@ -44,7 +50,15 @@ class LangChainChroma:
                         "char_end": start + len(piece.page_content),
                     }
                 )
-        collection.add(ids=ids, documents=texts, metadatas=metas)
+        # Chroma caps a single add() at 5461 records, and a modest corpus blows past that
+        # — 1.6 MB at chunk_size=256 is over 8000 chunks. Batch, or it dies at scale only.
+        BATCH = 5000
+        for i in range(0, len(ids), BATCH):
+            collection.add(
+                ids=ids[i : i + BATCH],
+                documents=texts[i : i + BATCH],
+                metadatas=metas[i : i + BATCH],
+            )
         return collection
 
     def retrieve(self, query: str, index, config: dict) -> RetrievalTrace:
