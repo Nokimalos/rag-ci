@@ -274,3 +274,44 @@ def test_a_flat_series_gets_its_own_explanation_not_a_bad_fit_one():
     out = " ".join(console.export_text().split())
     assert "did not move" in out
     assert "log-linear" not in out
+
+
+def _tied(first_rung: int, last_rung: int):
+    from ragci.sweep import Rung, SweepEvaluation, SweepOutcome
+
+    return SweepOutcome(
+        winner={"k": 0},
+        evaluations=[
+            SweepEvaluation(config={"k": i}, score=0.9, n_cases=first_rung, rung=0)
+            for i in range(3)
+        ],
+        rungs=[
+            Rung(index=0, n_configs=3, n_cases=first_rung),
+            Rung(index=1, n_configs=2, n_cases=last_rung),
+        ],
+        evaluations_run=3,
+        n_configs=3,
+        full_grid_cost=3 * last_rung,
+        arbitrary_elimination=True,
+    )
+
+
+def test_a_tie_on_a_small_first_rung_points_at_min_cases():
+    # Telling someone with 300 cases to "add cases" when the rung used 10 sends them to
+    # fix the wrong thing — the evidence was already there, the rung just did not use it.
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_tied(first_rung=10, last_rung=300), console)
+
+    out = " ".join(console.export_text().split())
+    assert "--min-cases above 10" in out
+    assert "add cases and sweep again" not in out
+
+
+def test_a_tie_when_the_rung_already_used_everything_says_add_cases():
+    from ragci.report import render_sweep
+
+    console = Console(record=True, width=100)
+    render_sweep(_tied(first_rung=40, last_rung=40), console)
+    assert "add cases and sweep again" in " ".join(console.export_text().split())
