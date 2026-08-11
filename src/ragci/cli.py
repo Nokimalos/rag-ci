@@ -99,7 +99,12 @@ def run(
     concurrency: int = typer.Option(8, help="Concurrent cases"),
     retries: int = typer.Option(0, help="Retry a failing case this many times before giving up"),
     max_cost: float | None = typer.Option(
-        None, "--max-cost", help="Stop before starting more paid work once this USD budget is spent"
+        None,
+        "--max-cost",
+        help=(
+            "Stop before starting more paid work once this USD budget is spent. "
+            "Runs cases one at a time, so a budgeted run is slower than an unbudgeted one."
+        ),
     ),
     judge: bool = typer.Option(False, "--judge", help="Also score answers with an LLM judge"),
     judge_model: str = typer.Option(JUDGE_MODEL, help="Model used for judging"),

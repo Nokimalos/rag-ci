@@ -59,6 +59,30 @@ Without a baseline the action still runs and reports numbers — it just cannot 
 Code `2` is deliberately distinct from `1`. "The pipeline got worse" and "I could not tell"
 are different problems, and a stale baseline is not a quality signal.
 
+## Capping what a run can spend
+
+`rag-ci run --judge` makes one model call per case, so a large golden set has an
+open-ended bill. `--max-cost 5.00` stops before starting further paid work once the spend
+reported by your adapter reaches the budget.
+
+```bash
+rag-ci run --judge --max-cost 5.00
+```
+
+**A budgeted run is slower.** Cost is only known after a call returns, so the run
+evaluates cases one at a time rather than concurrently — otherwise every in-flight call
+could overshoot together. Measured on twenty cases against a 50 ms retriever, that is
+about six times slower than the same run without a budget. Set a budget to bound spend,
+not as a precaution you leave on.
+
+**A truncated run cannot be used.** It is marked incomplete, which is distinct from
+invalid: the pipeline was healthy, the sample just is not finished. The gate refuses it
+and `--update-baseline` refuses it, because half a golden set produces a perfectly
+plausible-looking score that means nothing next to a full baseline. `rag-ci run` exits `2`.
+
+Adapters that do not report `cost_usd` cannot be budget-limited — there is nothing to
+count, so the run completes normally.
+
 ## Flaky pipelines
 
 A run where more than 5% of cases error is marked invalid and the gate exits `2` rather
