@@ -15,8 +15,19 @@ from ragci.contract import Chunk, ParamSpec, RetrievalTrace, Step, adapter
     primary_metric="recall@10",
 )
 class MyRag:
+    # Optional. Implement it if rag-ci can rebuild your index — that is what lets a sweep
+    # vary index-time parameters. `run` calls it once before the cases; `sweep` calls it
+    # once per distinct index. Omit it entirely to evaluate an index you already have,
+    # and `index` below simply arrives as None.
+    # def build_index(self, corpus, config: dict):
+    #     ...
+
     def retrieve(self, query: str, index, config: dict) -> RetrievalTrace:
         """Return what your pipeline retrieved for this query.
+
+        `index` is whatever build_index returned, or None if you did not implement it.
+        Build nothing here: rag-ci runs cases concurrently, so constructing a client per
+        call means constructing several at once, which some vector stores do not survive.
 
         Report char_start/char_end whenever you can: exact offsets let rag-ci match
         chunks to passages precisely instead of falling back to token overlap.

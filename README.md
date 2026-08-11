@@ -129,9 +129,12 @@ Not on GitHub? The gate is a CLI, so any runner works. GitLab gets a one-job set
 [docs/gitlab-ci.md](docs/gitlab-ci.md), where `allow_failure: exit_codes` maps the `1` / `2`
 split onto the pipeline itself — a distinction GitHub Actions cannot express.
 
-A worked example lives in [`examples/reference/`](examples/reference): an adapter, its
-golden set, and a committed baseline. rag-ci gates it on every pull request to this
-repository.
+Two worked examples. [`examples/reference/`](examples/reference) is dependency-free and
+gates every pull request to this repository.
+[`examples/langchain-chroma/`](examples/langchain-chroma) is the real thing — LangChain
+chunking, Chroma storage, ONNX embeddings — and shows the one flag
+(`add_start_index=True`) that decides whether rag-ci matches passages exactly or falls
+back to token overlap.
 
 ## What makes it different
 

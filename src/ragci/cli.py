@@ -28,7 +28,7 @@ from ragci.report import (
     save_json,
 )
 from ragci.review import ReviewSession, run_review
-from ragci.runner import run_cases
+from ragci.runner import _call, run_cases
 from ragci.sweep import sweep_adapter
 
 app = typer.Typer(add_completion=False, help="Regression testing for RAG pipelines.")
@@ -131,11 +131,22 @@ def run(
             console.print(f"[red]Error:[/] {escape(str(exc))}")
             raise typer.Exit(code=1) from exc
 
+    # Build the index once, before the cases run. Without this an adapter that declares
+    # build_index gets index=None and fails with an error that points at the adapter
+    # rather than here — and building it inside retrieve() instead means every worker
+    # thread builds one at the same time, which several vector-store clients cannot
+    # survive. sweep has always done this; run had not.
+    config = {"top_k": top_k}
+    index = None
+    if hasattr(instance, "build_index"):
+        index = asyncio.run(_call(instance.build_index, None, config))
+
     record = asyncio.run(
         run_cases(
             instance,
             list(load_golden(golden)),
-            config={"top_k": top_k},
+            config=config,
+            index=index,
             metric_names=metric_names,
             golden_hash=golden_hash(golden),
             concurrency=concurrency,
