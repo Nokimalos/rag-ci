@@ -6,7 +6,7 @@ can be argued with rather than rediscovered.
 
 This document tracks intent, not progress. See the README for what actually ships today.
 
-**Designed but not implemented as of 0.7.0** — listed here so nothing below reads as a
+**Designed but not implemented as of 0.7.1** — listed here so nothing below reads as a
 feature list: two-stage evaluation on large corpora, and gating on latency.
 The last of those is not simply unbuilt: timings are deliberately excluded from the run
 record so two identical runs produce identical bytes, and gating on latency would mean

@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Nokimalos/rag-ci@v0.7.0
+      - uses: Nokimalos/rag-ci@v0.7.1
         with:
           adapter: ragci_adapter.py
           golden: tests/golden.jsonl

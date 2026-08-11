@@ -8,6 +8,25 @@ While the version stays below 1.0, the adapter contract may change in a minor re
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-08-11
+
+Both fixes came from running rag-ci over SQuAD — 48 Wikipedia articles, 300 questions,
+LangChain chunking, Chroma storage — rather than from reading our own code.
+
+### Fixed
+
+- **A tie-break pointed at the wrong remedy.** When a rung eliminated configurations that
+  were tied, rag-ci said "add cases and sweep again". On a golden set of 300 cases whose
+  first rung used 10, that sends you to collect questions you already have — the evidence
+  was there, the rung just did not use it. The message now names `--min-cases` when the
+  first rung is small relative to the deepest, and keeps the original wording when the run
+  genuinely used everything available.
+- **`examples/langchain-chroma` did not survive a real corpus**, and it ships in the sdist.
+  Chroma caps a single `add()` at 5461 records, which 1.6 MB at `chunk_size=256` exceeds;
+  and `EphemeralClient()` returns the same in-process client, so a second `build_index` for
+  the same parameters found its collection already created. Worth stating in the contract:
+  a sweep calls `build_index` once per rung, so it has to be idempotent.
+
 ## [0.7.0] — 2026-08-11
 
 ### Fixed
