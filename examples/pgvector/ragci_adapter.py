@@ -75,9 +75,7 @@ class PgVectorRag:
                     copy.write_row((doc_id, start, end, body, str(vector)))
 
             # Index after the load: building it first would rebuild on every insert.
-            conn.execute(
-                f"CREATE INDEX ON {table} USING hnsw (embedding vector_cosine_ops)"
-            )
+            conn.execute(f"CREATE INDEX ON {table} USING hnsw (embedding vector_cosine_ops)")
         return table
 
     def retrieve(self, query: str, index, config: dict) -> RetrievalTrace:
