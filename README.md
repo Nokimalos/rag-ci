@@ -131,10 +131,12 @@ split onto the pipeline itself — a distinction GitHub Actions cannot express.
 
 Two worked examples. [`examples/reference/`](examples/reference) is dependency-free and
 gates every pull request to this repository.
-[`examples/langchain-chroma/`](examples/langchain-chroma) is the real thing — LangChain
-chunking, Chroma storage, ONNX embeddings — and shows the one flag
+Two more are real pipelines:
+[`examples/langchain-chroma/`](examples/langchain-chroma) shows the one flag
 (`add_start_index=True`) that decides whether rag-ci matches passages exactly or falls
-back to token overlap.
+back to token overlap, and [`examples/pgvector/`](examples/pgvector) does the same in
+plain `psycopg` against Postgres — where the requirement is just two integer columns
+beside the vector.
 
 ## What makes it different
 
