@@ -16,6 +16,7 @@ GateReason = Literal[
     "regression",
     "stale_baseline",
     "invalid_run",
+    "incomplete_run",
     "no_baseline",
     "no_pairs",
 ]
@@ -60,6 +61,17 @@ def decide(
     seed: int = 0,
 ) -> GateDecision:
     metric = metric or candidate.primary_metric
+
+    if not candidate.complete:
+        return GateDecision(
+            passed=False,
+            reason="incomplete_run",
+            metric=metric,
+            message=(
+                "This run stopped before all requested work finished. Incomplete runs cannot "
+                "be compared against or establish a baseline."
+            ),
+        )
 
     if not candidate.valid:
         return GateDecision(

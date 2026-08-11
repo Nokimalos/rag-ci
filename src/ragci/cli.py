@@ -98,10 +98,17 @@ def run(
     out: Path = typer.Option(Path(".ragci/run.json"), help="Where to write the run record"),
     concurrency: int = typer.Option(8, help="Concurrent cases"),
     retries: int = typer.Option(0, help="Retry a failing case this many times before giving up"),
+    max_cost: float | None = typer.Option(
+        None, "--max-cost", help="Stop before starting more paid work once this USD budget is spent"
+    ),
     judge: bool = typer.Option(False, "--judge", help="Also score answers with an LLM judge"),
     judge_model: str = typer.Option(JUDGE_MODEL, help="Model used for judging"),
 ) -> None:
     """Measure retrieval quality against the golden set."""
+    if max_cost is not None and max_cost <= 0:
+        console.print("[red]Error:[/] --max-cost must be greater than zero")
+        raise typer.Exit(code=1)
+
     instance = load_adapter(adapter)
     metric_names = list(metric) if metric else [instance.__ragci_spec__.primary_metric]
 
@@ -129,6 +136,7 @@ def run(
             concurrency=concurrency,
             retries=retries,
             judge=judge_instance,
+            max_cost=max_cost,
         )
     )
 
@@ -137,7 +145,7 @@ def run(
     save_json(record, out)
     console.print(f"Run record written to {out}")
 
-    if not record.valid:
+    if not record.valid or not record.complete:
         raise typer.Exit(code=2)
 
 
@@ -159,6 +167,9 @@ def gate(
     record = load_json(run)
 
     if update_baseline:
+        if not record.complete:
+            console.print("[red]Error:[/] incomplete runs cannot establish or replace a baseline")
+            raise typer.Exit(code=2)
         Path(baseline).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(run, baseline)
         console.print(f"Baseline updated from {run}.")

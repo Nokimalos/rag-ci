@@ -40,6 +40,11 @@ def render_console(record: RunRecord, console: Console | None = None) -> None:
     if record.tokens_per_query is not None:
         console.print(f"tokens {record.tokens_per_query:.0f} per query")
 
+    if not record.complete:
+        console.print(
+            "[bold yellow]INCOMPLETE RUN[/] — stopped before all requested work finished. "
+            "This run cannot be used by the gate or promoted to a baseline."
+        )
     if not record.valid:
         console.print(
             f"[bold red]INVALID RUN[/] — {record.error_rate:.0%} of cases errored. "
@@ -101,6 +106,12 @@ def render_markdown(record: RunRecord, decision: GateDecision | None = None) -> 
         lines.append(f"cost {record.cost_usd_per_query:.4f} USD per query")
     lines.append("")
 
+    if not record.complete:
+        lines += [
+            "> ⚠️ **Incomplete run** — stopped before all requested work finished. "
+            "This run cannot be gated or promoted to a baseline.",
+            "",
+        ]
     if not record.valid:
         lines += [
             f"> ⚠️ **Invalid run** — {record.error_rate:.0%} of cases errored. "
