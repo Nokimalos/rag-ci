@@ -605,3 +605,108 @@ def test_golden_anchor_rejects_a_missing_corpus(tmp_path):
     )
     assert result.exit_code == 2
     assert "does not exist" in _out(result)
+
+
+def test_run_builds_the_index_before_the_cases(tmp_path):
+    # An adapter that declares build_index used to get index=None from `run` and fail
+    # with an error pointing at itself. Building it inside retrieve() instead meant every
+    # worker thread built one at once, which several vector-store clients cannot survive.
+    adapter = tmp_path / "ragci_adapter.py"
+    adapter.write_text(
+        "from ragci.contract import Chunk, ParamSpec, RetrievalTrace, Step, adapter\n"
+        "\n"
+        "@adapter(index_time_params=[ParamSpec(name='chunk_size', values=[10])],\n"
+        "         primary_metric='recall@3')\n"
+        "class Indexed:\n"
+        "    builds = 0\n"
+        "    def build_index(self, corpus, config):\n"
+        "        Indexed.builds += 1\n"
+        "        return {'built': True}\n"
+        "    def retrieve(self, query, index, config):\n"
+        "        assert index is not None, 'run must hand the adapter its index'\n"
+        "        return RetrievalTrace(steps=[Step(query=query, chunks=[Chunk(\n"
+        "            text='Gravity is the attraction between masses.', doc_id='physics',\n"
+        "            char_start=0, char_end=41)])], latency_ms=1.0)\n"
+    )
+    golden = tmp_path / "golden.jsonl"
+    save_golden(
+        golden,
+        [
+            GoldenCase(
+                id=f"q{i}",
+                question="what is gravity",
+                required_passages=[
+                    Passage(
+                        doc_id="physics",
+                        char_start=0,
+                        char_end=41,
+                        text="Gravity is the attraction between masses.",
+                    )
+                ],
+            )
+            for i in range(12)
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--adapter",
+            str(adapter),
+            "--golden",
+            str(golden),
+            "--out",
+            str(tmp_path / "run.json"),
+        ],
+    )
+    assert result.exit_code == 0, _out(result)
+    assert "1.000" in _out(result)
+
+
+def test_an_adapter_without_build_index_still_runs(tmp_path):
+    # Adapters that evaluate an existing production index omit build_index entirely.
+    adapter = tmp_path / "ragci_adapter.py"
+    adapter.write_text(
+        "from ragci.contract import Chunk, ParamSpec, RetrievalTrace, Step, adapter\n"
+        "\n"
+        "@adapter(query_time_params=[ParamSpec(name='top_k', values=[3])],\n"
+        "         primary_metric='recall@3')\n"
+        "class NoIndex:\n"
+        "    def retrieve(self, query, index, config):\n"
+        "        assert index is None\n"
+        "        return RetrievalTrace(steps=[Step(query=query, chunks=[Chunk(\n"
+        "            text='Gravity is the attraction between masses.', doc_id='physics',\n"
+        "            char_start=0, char_end=41)])], latency_ms=1.0)\n"
+    )
+    golden = tmp_path / "golden.jsonl"
+    save_golden(
+        golden,
+        [
+            GoldenCase(
+                id="q1",
+                question="what is gravity",
+                required_passages=[
+                    Passage(
+                        doc_id="physics",
+                        char_start=0,
+                        char_end=41,
+                        text="Gravity is the attraction between masses.",
+                    )
+                ],
+            )
+        ],
+    )
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--adapter",
+            str(adapter),
+            "--golden",
+            str(golden),
+            "--out",
+            str(tmp_path / "run.json"),
+        ],
+    )
+    assert result.exit_code == 0, _out(result)
