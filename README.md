@@ -138,6 +138,16 @@ back to token overlap, and [`examples/pgvector/`](examples/pgvector) does the sa
 plain `psycopg` against Postgres — where the requirement is just two integer columns
 beside the vector.
 
+## A result, rather than a claim
+
+[`experiments/chunk-size/`](experiments/chunk-size) runs six chunking configurations over
+48 Wikipedia articles and 300 SQuAD questions. The apparent spread is 12 points of
+recall@10. Tested against held-out cases, the best configuration is not measurably better
+than the second: `+0.040 (95% CI [-0.013, 0.107], p=0.1190)`.
+
+Which is the argument for this tool, stated in the only way worth stating it. Reproducible
+in two commands.
+
 ## What makes it different
 
 - **Ground truth anchored to document passages, never to chunks.** Change the chunk size and
